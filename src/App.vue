@@ -221,6 +221,198 @@ const readActiveChart = async () => {
   }
 }
 
+// ==========================================
+// Autonomous 24/7 Chart Watcher Bot State
+// ==========================================
+const botActive = ref(true)
+const botScanInterval = ref(15) // seconds
+const botCountdown = ref(15)
+const botMinGradeFilter = ref('ALL') // 'ALL' | 'B' | 'A' | 'A+'
+const botAudioAlerts = ref(true)
+const botDesktopAlerts = ref(false)
+const botDetectionLog = ref([])
+const botTotalScans = ref(0)
+const lastAlertedFingerprints = ref({})
+let botTimer = null
+
+const playGradeChime = (grade) => {
+  if (!botAudioAlerts.value) return
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    if (grade === 'A+') {
+      // Triumphant 4-note ascending chord C5 -> E5 -> G5 -> C6
+      const freqs = [523.25, 659.25, 783.99, 1046.50]
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'triangle'
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08)
+        gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.08)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.35)
+        osc.start(ctx.currentTime + idx * 0.08)
+        osc.stop(ctx.currentTime + idx * 0.08 + 0.35)
+      })
+    } else if (grade === 'A') {
+      // 2-note high crisp chime
+      const freqs = [880, 1108.73]
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.09)
+        gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.09)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.09 + 0.3)
+        osc.start(ctx.currentTime + idx * 0.09)
+        osc.stop(ctx.currentTime + idx * 0.09 + 0.3)
+      })
+    } else if (grade === 'B') {
+      // Confirmation tone
+      const freqs = [659.25, 880]
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1)
+        gain.gain.setValueAtTime(0.1, ctx.currentTime + idx * 0.1)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.25)
+        osc.start(ctx.currentTime + idx * 0.1)
+        osc.stop(ctx.currentTime + idx * 0.1 + 0.25)
+      })
+    } else {
+      // Grade C subtle notification
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(523.25, ctx.currentTime)
+      gain.gain.setValueAtTime(0.08, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.2)
+    }
+  } catch (e) {}
+}
+
+const toggleDesktopAlerts = async () => {
+  if (!('Notification' in window)) {
+    triggerToast('Desktop notifications are not supported in this browser.')
+    return
+  }
+  if (Notification.permission === 'granted') {
+    botDesktopAlerts.value = !botDesktopAlerts.value
+    triggerToast(`Desktop alerts ${botDesktopAlerts.value ? 'Enabled' : 'Disabled'}`)
+  } else if (Notification.permission !== 'denied') {
+    const perm = await Notification.requestPermission()
+    if (perm === 'granted') {
+      botDesktopAlerts.value = true
+      triggerToast('Desktop alerts Enabled! You will receive system notifications.')
+      try {
+        new Notification('MySIGNAL Quant Bot', {
+          body: 'Automated 24/7 Chart Watcher is now active!',
+          icon: '/favicon.ico'
+        })
+      } catch (e) {}
+    } else {
+      botDesktopAlerts.value = false
+      triggerToast('Notification permission denied by browser.')
+    }
+  } else {
+    triggerToast('Notification permission previously blocked. Enable in browser settings.')
+  }
+}
+
+const processBotSignals = (signalsList) => {
+  if (!botActive.value || !signalsList || !signalsList.length) return
+
+  botTotalScans.value++
+
+  signalsList.forEach(sig => {
+    if (!sig.setup) return
+
+    const grade = sig.setup.grade
+
+    // Check minimum grade filter
+    let passes = true
+    if (botMinGradeFilter.value === 'A+' && grade !== 'A+') passes = false
+    else if (botMinGradeFilter.value === 'A' && grade !== 'A+' && grade !== 'A') passes = false
+    else if (botMinGradeFilter.value === 'B' && grade === 'C') passes = false
+
+    if (!passes) return
+
+    const fingerprint = `${sig.symbol}-${sig.type}-${grade}-${sig.entry}`
+    const previous = lastAlertedFingerprints.value[sig.symbol]
+
+    if (previous !== fingerprint) {
+      lastAlertedFingerprints.value[sig.symbol] = fingerprint
+
+      const newEntry = {
+        id: `bot-log-${Date.now()}-${sig.symbol}-${Math.random().toString(36).substr(2, 4)}`,
+        timestamp: new Date().toLocaleTimeString(),
+        symbol: sig.symbol,
+        name: sig.name,
+        type: sig.type,
+        isBull: sig.isBull,
+        grade: sig.setup.grade,
+        setup: sig.setup,
+        entry: sig.entry,
+        sl: sig.sl,
+        tp1: sig.tp1,
+        tp2: sig.tp2,
+        confidence: sig.confidence,
+        confluencesPassed: sig.setup.confluencesPassed,
+        totalConfluences: sig.setup.totalConfluences,
+        advice: sig.setup.advice
+      }
+
+      botDetectionLog.value.unshift(newEntry)
+      if (botDetectionLog.value.length > 25) {
+        botDetectionLog.value.pop()
+      }
+
+      playGradeChime(grade)
+      triggerToast(`Bot Alert: [${sig.setup.shortTitle}] on ${sig.symbol} (${sig.type} at ${sig.entry})`)
+
+      if (botDesktopAlerts.value && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification(`MySIGNAL Bot: [${sig.setup.shortTitle}] ${sig.symbol}`, {
+            body: `${sig.type} at ${sig.entry} | SL: ${sig.sl} | TP1: ${sig.tp1} | ${sig.setup.confluencesPassed}/5 Confluences`,
+            icon: '/favicon.ico'
+          })
+        } catch (e) {}
+      }
+    }
+  })
+}
+
+const filteredBotLog = computed(() => {
+  if (botMinGradeFilter.value === 'ALL') return botDetectionLog.value
+  if (botMinGradeFilter.value === 'B') return botDetectionLog.value.filter(item => item.grade !== 'C')
+  if (botMinGradeFilter.value === 'A') return botDetectionLog.value.filter(item => item.grade === 'A+' || item.grade === 'A')
+  if (botMinGradeFilter.value === 'A+') return botDetectionLog.value.filter(item => item.grade === 'A+')
+  return botDetectionLog.value
+})
+
+const triggerManualBotScan = async () => {
+  botCountdown.value = botScanInterval.value
+  playTone('scan')
+  triggerToast('Manual Bot scan triggered...')
+  await fetchLiveMarket()
+  playTone('success')
+}
+
+const clearBotLog = () => {
+  botDetectionLog.value = []
+  lastAlertedFingerprints.value = {}
+  triggerToast('Automated detection log cleared.')
+}
+
 const fetchLiveMarket = async () => {
   try {
     isLiveLoading.value = true
@@ -236,6 +428,13 @@ const fetchLiveMarket = async () => {
         dynamicStats.value = data.stats
       }
       lastUpdatedTime.value = new Date(data.lastUpdated).toLocaleTimeString()
+
+      // Process signals through the automated bot watcher
+      processBotSignals(data.signals)
+
+      // Keep marketAnalyzed active as the bot continuously monitors the chart
+      marketAnalyzed.value = true
+      lastAnalyzedTime.value = new Date().toLocaleTimeString()
 
       // Keep active ticker price in sync with calculator
       const curTicker = tickers.value.find(t => t.symbol === calcSymbol.value)
@@ -347,23 +546,35 @@ const mountTradingView = () => {
   }
 }
 
-let pollInterval = null
 let clockInterval = null
 
 onMounted(async () => {
   mountTradingView()
   await fetchLiveMarket()
+  // Process initial signals on startup
+  processBotSignals(signals.value)
+
   // Real-time ticking clock updated every second (1000ms)
   clockInterval = setInterval(() => {
     liveClock.value = new Date().toLocaleTimeString()
   }, 1000)
-  // Auto-refresh real market data from Kraken every 10 seconds
-  pollInterval = setInterval(fetchLiveMarket, 10000)
+
+  // Automated Chart Watcher Bot countdown ticker
+  botTimer = setInterval(() => {
+    if (botActive.value) {
+      if (botCountdown.value <= 1) {
+        botCountdown.value = botScanInterval.value
+        fetchLiveMarket()
+      } else {
+        botCountdown.value--
+      }
+    }
+  }, 1000)
 })
 
 onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval)
-  if (pollInterval) clearInterval(pollInterval)
+  if (botTimer) clearInterval(botTimer)
 })
 </script>
 
@@ -715,6 +926,322 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <!-- Autonomous 24/7 Chart Watcher Bot & Setup Quality Radar (A+, A, B, C) -->
+      <section class="glass-card rounded-2xl p-5 lg:p-6 border border-cyan-500/30 bg-dark-900/90 space-y-6 shadow-glass relative overflow-hidden">
+        <!-- Background Ambient Glow -->
+        <div class="absolute -right-20 -top-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Bot Control Header -->
+        <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-[10px] font-mono text-neon-cyan uppercase font-bold tracking-wider">
+                <span class="relative flex h-2 w-2">
+                  <span :class="botActive ? 'animate-ping' : ''" class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span :class="botActive ? 'bg-emerald-500' : 'bg-slate-500'" class="relative inline-flex rounded-full h-2 w-2"></span>
+                </span>
+                <span>{{ botActive ? 'AUTONOMOUS CHART WATCHER ACTIVE' : 'BOT MONITOR PAUSED' }}</span>
+              </span>
+
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-dark-800 text-slate-300 border border-white/10">
+                Watching: XAUUSD & BTCUSDT (M15)
+              </span>
+
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                Next Scan: <strong class="text-white">{{ botCountdown }}s</strong>
+              </span>
+            </div>
+
+            <h2 class="text-xl font-black text-white tracking-tight flex items-center gap-2">
+              <svg class="w-5 h-5 text-neon-cyan animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+              <span>Automated Chart Watcher Bot & Setup Quality Radar</span>
+            </h2>
+            <p class="text-xs text-slate-400">
+              Autonomous background engine continuously watching live candles & orderflow. Evaluates 5-point institutional confluences and alerts every time a verified setup appears (Tiers: A+, A, B, C).
+            </p>
+          </div>
+
+          <!-- Bot Action Controls Bar -->
+          <div class="flex items-center gap-2 flex-wrap font-mono text-xs">
+            <!-- Active Toggle Button -->
+            <button 
+              @click="botActive = !botActive"
+              :class="botActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-dark-800 text-slate-400 border-white/10'"
+              class="px-3 py-1.5 rounded-xl border font-bold transition-all flex items-center gap-1.5 cursor-pointer hover:border-emerald-400">
+              <span :class="botActive ? 'bg-emerald-400' : 'bg-slate-500'" class="w-2 h-2 rounded-full"></span>
+              <span>{{ botActive ? 'Bot: ON' : 'Bot: PAUSED' }}</span>
+            </button>
+
+            <!-- Audio Chime Toggle Button -->
+            <button 
+              @click="botAudioAlerts = !botAudioAlerts"
+              :class="botAudioAlerts ? 'bg-cyan-500/15 text-neon-cyan border-cyan-500/40' : 'bg-dark-800 text-slate-500 border-white/10'"
+              class="px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 cursor-pointer"
+              title="Toggle Audio Alert Chimes">
+              <span>{{ botAudioAlerts ? '🔊' : '🔇' }}</span>
+              <span class="hidden sm:inline text-[11px]">{{ botAudioAlerts ? 'Audio' : 'Muted' }}</span>
+            </button>
+
+            <!-- Desktop Notifications Toggle Button -->
+            <button 
+              @click="toggleDesktopAlerts()"
+              :class="botDesktopAlerts ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-dark-800 text-slate-500 border-white/10'"
+              class="px-2.5 py-1.5 rounded-xl border transition-all flex items-center gap-1 cursor-pointer"
+              title="Browser Desktop Notifications">
+              <span>🔔</span>
+              <span class="hidden sm:inline text-[11px]">{{ botDesktopAlerts ? 'Alerts ON' : 'Desktop' }}</span>
+            </button>
+
+            <!-- Manual Force Scan Now Button -->
+            <button 
+              @click="triggerManualBotScan()"
+              class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-dark-950 font-black tracking-wide shadow-glow-cyan transition-all flex items-center gap-1 cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Scan Now</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Setup Quality Tiers Matrix (A+, A, B, C) -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-mono text-slate-400">
+            <span class="text-[11px] uppercase tracking-wider font-bold text-slate-300 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-neon-cyan"></span>
+              Institutional Setup Classification Matrix:
+            </span>
+
+            <!-- Filter Bot Feed by Minimum Grade -->
+            <div class="flex items-center gap-1 p-0.5 rounded-lg bg-dark-950 border border-white/10 text-[11px]">
+              <span class="text-slate-500 px-2 py-0.5">Filter Alerts:</span>
+              <button 
+                v-for="gradeOpt in [
+                  { id: 'ALL', label: 'All (A+, A, B, C)' },
+                  { id: 'B', label: 'B & Above' },
+                  { id: 'A', label: 'A & A+ Only' },
+                  { id: 'A+', label: 'A+ Prime Only' }
+                ]"
+                :key="gradeOpt.id"
+                @click="botMinGradeFilter = gradeOpt.id"
+                :class="botMinGradeFilter === gradeOpt.id ? 'bg-dark-800 text-white font-bold border border-white/10 shadow-sm' : 'text-slate-400 hover:text-white'"
+                class="px-2 py-1 rounded transition-all">
+                {{ gradeOpt.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 Setup Cards (A+, A, B, C) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-mono text-xs">
+            <!-- Setup A+ -->
+            <div class="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/30 space-y-1.5 relative overflow-hidden">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black text-[10px] tracking-wider">
+                  ★ SETUP A+ // PRIME
+                </span>
+                <span class="text-[10px] text-amber-400 font-bold">5/5 Confluences</span>
+              </div>
+              <div class="font-bold text-white text-xs">Prime Institutional Execution</div>
+              <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
+                Full trend ribbon alignment, structural Break of Structure (BOS), mitigated Fair Value Gap, heavy orderflow delta dominance & low-noise Kaufman ER.
+              </p>
+              <div class="text-[9px] text-amber-300 font-bold pt-1 border-t border-amber-500/20">
+                Allocation: Half-Kelly Maximum (1.0x - 1.5x)
+              </div>
+            </div>
+
+            <!-- Setup A -->
+            <div class="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/30 space-y-1.5 relative overflow-hidden">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-black text-[10px] tracking-wider">
+                  ★ SETUP A // HIGH PROB
+                </span>
+                <span class="text-[10px] text-emerald-400 font-bold">4/5 Confluences</span>
+              </div>
+              <div class="font-bold text-white text-xs">High-Probability Trend Continuation</div>
+              <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
+                Dual EMA ribbon confirmed with ADX velocity expansion > 25, aligned candlestick anatomy, and clear directional orderflow volume.
+              </p>
+              <div class="text-[9px] text-emerald-300 font-bold pt-1 border-t border-emerald-500/20">
+                Allocation: Standard Risk (1.0x)
+              </div>
+            </div>
+
+            <!-- Setup B -->
+            <div class="p-3.5 rounded-xl bg-cyan-500/5 border border-cyan-500/30 space-y-1.5 relative overflow-hidden">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-black text-[10px] tracking-wider">
+                  ★ SETUP B // PULLBACK
+                </span>
+                <span class="text-[10px] text-cyan-400 font-bold">3/5 Confluences</span>
+              </div>
+              <div class="font-bold text-white text-xs">Momentum Retest / Retracement</div>
+              <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
+                Healthy pullback into EMA 21 or Volume POC within larger trend framework. Moderate Kaufman efficiency without opposing stop sweeps.
+              </p>
+              <div class="text-[9px] text-cyan-300 font-bold pt-1 border-t border-cyan-500/20">
+                Allocation: Moderate Risk (0.5x)
+              </div>
+            </div>
+
+            <!-- Setup C -->
+            <div class="p-3.5 rounded-xl bg-rose-500/5 border border-rose-500/30 space-y-1.5 relative overflow-hidden">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-black text-[10px] tracking-wider">
+                  ★ SETUP C // SCALP
+                </span>
+                <span class="text-[10px] text-rose-400 font-bold">1-2 Confluences</span>
+              </div>
+              <div class="font-bold text-white text-xs">Speculative Fade / Range Scalp</div>
+              <p class="text-[10px] text-slate-400 font-sans leading-relaxed">
+                Range chop or counter-trend liquidity sweep. Lower directional conviction. Requires tight ATR invalidation with rapid TP1 harvesting.
+              </p>
+              <div class="text-[9px] text-rose-300 font-bold pt-1 border-t border-rose-500/20">
+                Allocation: Tight Scalp (0.25x)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Automated Detection Log / Signal Wire Feed -->
+        <div class="space-y-3 pt-2 border-t border-white/10">
+          <div class="flex items-center justify-between text-xs font-mono text-slate-400">
+            <span class="flex items-center gap-2 font-bold text-slate-300">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span>Automated Bot Signal Feed:</span>
+              <span class="text-neon-cyan">({{ filteredBotLog.length }} Signals Generated)</span>
+            </span>
+
+            <div class="flex items-center gap-3">
+              <span class="text-[10px] text-slate-500 hidden sm:inline">Total Evaluations: {{ botTotalScans }}</span>
+              <button 
+                v-if="botDetectionLog.length > 0"
+                @click="clearBotLog()" 
+                class="hover:text-rose-400 transition-colors text-[11px] underline">
+                Clear Feed
+              </button>
+            </div>
+          </div>
+
+          <!-- Feed Container -->
+          <div class="space-y-2.5 max-h-[360px] overflow-y-auto pr-1 scrollbar-none font-mono">
+            <!-- Signal Entry Card -->
+            <div 
+              v-for="item in filteredBotLog" 
+              :key="item.id"
+              class="p-4 rounded-xl bg-dark-900/80 border border-white/10 hover:border-cyan-500/40 transition-all space-y-2.5">
+              
+              <!-- Meta Row -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <!-- Asset Badge -->
+                  <span 
+                    :class="item.symbol === 'XAUUSD' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'"
+                    class="px-2 py-0.5 rounded border text-[11px] font-black">
+                    {{ item.symbol }}
+                  </span>
+
+                  <!-- Setup Grade Pill -->
+                  <span 
+                    :class="item.setup?.badgeClass || 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'"
+                    class="px-2.5 py-0.5 rounded border text-[11px] font-black">
+                    {{ item.setup?.shortTitle || ('SETUP ' + item.grade) }}
+                  </span>
+
+                  <!-- Direction Badge -->
+                  <span 
+                    :class="item.isBull ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'"
+                    class="px-2 py-0.5 rounded border text-[10px] font-bold">
+                    {{ item.type === 'LONG' ? 'BUY / LONG' : 'SELL / SHORT' }}
+                  </span>
+
+                  <span class="text-slate-500 text-[10px]">{{ item.timestamp }}</span>
+                </div>
+
+                <!-- Confluences Summary -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-neon-cyan font-bold">
+                    {{ item.confluencesPassed }}/{{ item.totalConfluences }} Confluences
+                  </span>
+                  <span class="text-slate-600">•</span>
+                  <span class="text-slate-300 font-bold text-[11px]">{{ item.confidence }}% Conviction</span>
+                </div>
+              </div>
+
+              <!-- Price Levels Strip -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-dark-950/60 p-2.5 rounded-lg border border-white/5">
+                <div>
+                  <div class="text-[10px] text-slate-500 uppercase">Entry</div>
+                  <div class="font-bold text-white mt-0.5">{{ item.entry }}</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-rose-400 uppercase">Stop Loss</div>
+                  <div class="font-bold text-rose-400 mt-0.5">{{ item.sl }}</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-emerald-400 uppercase">Target 1</div>
+                  <div class="font-bold text-emerald-400 mt-0.5">{{ item.tp1 }}</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-emerald-400 uppercase">Target 2</div>
+                  <div class="font-bold text-emerald-400 mt-0.5">{{ item.tp2 }}</div>
+                </div>
+              </div>
+
+              <!-- Confluence Checklist & Advice -->
+              <div class="text-[11px] space-y-1.5 font-sans">
+                <div class="text-slate-300 font-mono text-[10px] bg-dark-850 p-2 rounded border border-white/5">
+                  <strong class="text-neon-cyan">Execution Protocol:</strong> {{ item.advice }}
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap pt-0.5 font-mono text-[10px]">
+                  <span 
+                    v-for="(crit, ci) in item.setup?.criteria" 
+                    :key="ci"
+                    :class="crit.passed ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-dark-850 text-slate-500 border-white/5 line-through'"
+                    class="px-2 py-0.5 rounded border">
+                    {{ crit.passed ? '✓' : '✗' }} {{ crit.name }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Action Bar -->
+              <div class="pt-1 flex items-center justify-between text-[11px] font-mono border-t border-white/5">
+                <span class="text-slate-500 text-[10px]">Verified against Kraken M15 candle math</span>
+                <div class="flex items-center gap-2">
+                  <button 
+                    @click="selectTicker(tickers.find(t => t.symbol === item.symbol) || tickers[0])"
+                    class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-750 text-slate-200 hover:text-white border border-white/10 text-[10px] transition-all">
+                    Chart View
+                  </button>
+                  <button 
+                    @click="loadSignalInCalculator(signals.find(s => s.symbol === item.symbol) || item)"
+                    class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-neon-cyan border border-cyan-500/40 text-[10px] font-bold transition-all">
+                    Size Position
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Empty State -->
+            <div v-if="filteredBotLog.length === 0" class="p-8 text-center text-slate-500 space-y-2">
+              <div class="inline-block p-2 rounded-full bg-cyan-500/10 text-neon-cyan animate-pulse">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="text-xs font-bold text-slate-400">Autonomous Bot Radar Active</div>
+              <p class="text-[11px] max-w-sm mx-auto">
+                Watching M15 candle closes & orderflow for Gold and Bitcoin. Signals will automatically appear here the instant setup criteria ({{ botMinGradeFilter }}) are met.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- AI Signals Desk (MySIGNAL Core) -->
       <section class="space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -855,12 +1382,22 @@ onUnmounted(() => {
                     <div class="text-[11px] text-slate-400 mt-0.5">{{ sig.name }}</div>
                   </div>
 
-                  <!-- Signal Type Badge -->
-                  <div 
-                    :class="sig.isBull ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'"
-                    class="px-3 py-1 rounded-xl border text-xs font-black font-mono tracking-wider flex items-center gap-1.5 shadow-sm">
-                    <span :class="sig.isBull ? 'bg-emerald-400' : 'bg-rose-400'" class="w-2 h-2 rounded-full animate-ping"></span>
-                    {{ sig.isBull ? 'BUY / LONG' : 'SELL / SHORT' }}
+                  <!-- Setup Grade & Signal Type Badges -->
+                  <div class="flex items-center gap-2">
+                    <span 
+                      v-if="sig.setup"
+                      :class="sig.setup.badgeClass"
+                      class="px-2.5 py-1 rounded-xl border text-xs font-black font-mono tracking-wider flex items-center gap-1 shadow-sm">
+                      <span>★</span>
+                      <span>{{ sig.setup.shortTitle }}</span>
+                    </span>
+
+                    <div 
+                      :class="sig.isBull ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'"
+                      class="px-3 py-1 rounded-xl border text-xs font-black font-mono tracking-wider flex items-center gap-1.5 shadow-sm">
+                      <span :class="sig.isBull ? 'bg-emerald-400' : 'bg-rose-400'" class="w-2 h-2 rounded-full animate-ping"></span>
+                      {{ sig.isBull ? 'BUY / LONG' : 'SELL / SHORT' }}
+                    </div>
                   </div>
                 </div>
 
@@ -935,6 +1472,38 @@ onUnmounted(() => {
                       <span class="text-[9px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-bold">
                         Production Cloud Live
                       </span>
+                    </div>
+
+                    <!-- 0. Setup Grade & Confluence Quality Audit -->
+                    <div v-if="sig.setup" class="p-3 rounded-xl bg-dark-900 border border-cyan-500/30 space-y-2">
+                      <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2">
+                          <span :class="sig.setup.badgeClass" class="px-2 py-0.5 rounded border text-[11px] font-bold">
+                            {{ sig.setup.shortTitle }}
+                          </span>
+                          <span class="text-white font-bold">{{ sig.setup.title }}</span>
+                        </div>
+                        <span class="text-neon-cyan font-bold">{{ sig.setup.confluencesPassed }}/{{ sig.setup.totalConfluences }} Criteria Met</span>
+                      </div>
+                      <p class="text-[11px] text-slate-300 leading-relaxed bg-dark-950/70 p-2 rounded-lg border border-white/5">
+                        {{ sig.setup.advice }}
+                      </p>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                        <div 
+                          v-for="(crit, ci) in sig.setup.criteria" 
+                          :key="ci"
+                          class="flex items-start gap-1.5 text-[10px] p-1.5 rounded bg-dark-850 border border-white/5">
+                          <span :class="crit.passed ? 'text-emerald-400' : 'text-slate-500'" class="font-bold shrink-0">
+                            {{ crit.passed ? '✓' : '✗' }}
+                          </span>
+                          <div>
+                            <span :class="crit.passed ? 'text-slate-200 font-semibold' : 'text-slate-400 line-through'">
+                              {{ crit.name }}
+                            </span>
+                            <div class="text-[9px] text-slate-400 leading-tight mt-0.5">{{ crit.detail }}</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <!-- 1. Market Regime & Hurst Exponent -->

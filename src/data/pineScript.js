@@ -145,6 +145,23 @@ isBearEngulf   = (close < open) and (close[1] > open[1]) and (close < open[1]) a
 isBullBOS      = ta.crossover(close, swingHighest[1])
 isBearBOS      = ta.crossunder(close, swingLowest[1])
 
+// Volume Spike
+volMa          = ta.sma(volume, 20)
+volSurge       = volume > (volMa * 1.3)
+
+// =============================================================================
+// 5. INSTITUTIONAL SETUP GRADING (A+, A, B, C)
+// =============================================================================
+confRibbon   = (activeDir == 1 ? (emaFast > emaSlow and close > emaFast) : (activeDir == -1 ? (emaFast < emaSlow and close < emaFast) : false))
+confStruct   = isBullBOS or isBearBOS
+confCandle   = isHammer or isShootingStar or isBullEngulf or isBearEngulf
+confVolume   = volSurge
+confRegime   = isTrending
+
+confScore    = (confRibbon ? 1 : 0) + (confStruct ? 1 : 0) + (confCandle ? 1 : 0) + (confVolume ? 1 : 0) + (confRegime ? 1 : 0)
+setupGrade   = confScore >= 5 ? "A+" : (confScore == 4 ? "A" : (confScore == 3 ? "B" : "C"))
+setupColor   = setupGrade == "A+" ? color.purple : (setupGrade == "A" ? color.green : (setupGrade == "B" ? color.yellow : color.gray))
+
 // Plot Chart Reading Labels on Candles
 plotshape(isHammer, title="Hammer Rejection", style=shape.labelup, location=location.belowbar, color=color.new(color.teal, 10), text="PINBAR", textcolor=color.white, size=size.tiny)
 plotshape(isShootingStar, title="Shooting Star Rejection", style=shape.labeldown, location=location.abovebar, color=color.new(color.maroon, 10), text="PINBAR", textcolor=color.white, size=size.tiny)
@@ -154,7 +171,7 @@ plotshape(isBullBOS, title="Bullish BOS", style=shape.labelup, location=location
 plotshape(isBearBOS, title="Bearish BOS", style=shape.labeldown, location=location.abovebar, color=color.new(color.purple, 10), text="BOS", textcolor=color.white, size=size.tiny)
 
 // =============================================================================
-// 5. CHART PLOTS & VISUALS
+// 6. CHART PLOTS & VISUALS
 // =============================================================================
 
 // Plot Moving Averages
@@ -175,63 +192,70 @@ plotshape(longTrigger, title="Long Signal Icon", style=shape.triangleup, locatio
 plotshape(shortTrigger, title="Short Signal Icon", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal)
 
 // =============================================================================
-// 6. ON-SCREEN HUD DASHBOARD TABLE
+// 7. ON-SCREEN HUD DASHBOARD TABLE (10 ROWS)
 // =============================================================================
-var table hud = table.new(position.top_right, 2, 9, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
+var table hud = table.new(position.top_right, 2, 10, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
 
 if barstate.islast and showTable
     // Header
     table.cell(hud, 0, 0, "QUANT ENGINE v5", bgcolor=color.new(#161b22, 10), text_color=color.white, text_size=size.small)
     table.cell(hud, 1, 0, syminfo.ticker + " [" + timeframe.period + "]", bgcolor=color.new(#161b22, 10), text_color=color.aqua, text_size=size.small)
 
+    // Setup Grade Radar
+    table.cell(hud, 0, 1, "Setup Quality", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 1, "TIER " + setupGrade + " (" + str.tostring(confScore) + "/5)", bgcolor=color.new(setupColor, 75), text_color=color.white, text_size=size.small)
+
     // Market Regime
     regimeStr = isBullish ? "🟢 BULLISH" : (isBearish ? "🔴 BEARISH" : "🟡 CHOP / RANGE")
     regimeBg  = isBullish ? color.new(color.green, 70) : (isBearish ? color.new(color.red, 70) : color.new(color.yellow, 70))
-    table.cell(hud, 0, 1, "Regime Status", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 1, regimeStr, bgcolor=regimeBg, text_color=color.white, text_size=size.small)
+    table.cell(hud, 0, 2, "Regime Status", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 2, regimeStr, bgcolor=regimeBg, text_color=color.white, text_size=size.small)
 
     // ADX Trend Strength
     adxStr = str.tostring(adxVal, "#.#") + (adxVal >= adxThresh ? " (Trending)" : " (Chop)")
     adxCol = adxVal >= adxThresh ? color.lime : color.orange
-    table.cell(hud, 0, 2, "ADX (14)", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 2, adxStr, text_color=adxCol, text_size=size.small)
+    table.cell(hud, 0, 3, "ADX (14)", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 3, adxStr, text_color=adxCol, text_size=size.small)
 
     // Kaufman Efficiency Ratio
     erStr = str.tostring(kaufmanER, "#.##") + (kaufmanER >= erThresh ? " (Smooth)" : " (Noisy)")
     erCol = kaufmanER >= erThresh ? color.lime : color.orange
-    table.cell(hud, 0, 3, "Efficiency Ratio", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 3, erStr, text_color=erCol, text_size=size.small)
+    table.cell(hud, 0, 4, "Efficiency Ratio", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 4, erStr, text_color=erCol, text_size=size.small)
 
     // Current ATR
-    table.cell(hud, 0, 4, "Current ATR (14)", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 4, str.tostring(atrVal, "#.####"), text_color=color.white, text_size=size.small)
+    table.cell(hud, 0, 5, "Current ATR (14)", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 5, str.tostring(atrVal, "#.####"), text_color=color.white, text_size=size.small)
 
     // Active Setup State
     activeStr = activeDir == 1 ? "LONG ACTIVE" : (activeDir == -1 ? "SHORT ACTIVE" : "STAND ASIDE")
-    table.cell(hud, 0, 5, "Trade Setup", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 5, activeStr, text_color=activeDir == 1 ? color.green : (activeDir == -1 ? color.red : color.gray), text_size=size.small)
+    table.cell(hud, 0, 6, "Trade Setup", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 6, activeStr, text_color=activeDir == 1 ? color.green : (activeDir == -1 ? color.red : color.gray), text_size=size.small)
 
     // Stop Loss Level
     slStr = activeDir != 0 ? str.tostring(slP, "#.##") + " (" + str.tostring(riskR, "#.##") + " pts)" : "--"
-    table.cell(hud, 0, 6, "Dynamic SL", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 6, slStr, text_color=color.red, text_size=size.small)
+    table.cell(hud, 0, 7, "Dynamic SL", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 7, slStr, text_color=color.red, text_size=size.small)
 
     // Take Profit Levels
     tpStr = activeDir != 0 ? "TP1: " + str.tostring(tp1P, "#.##") + "\\nTP2: " + str.tostring(tp2P, "#.##") : "--"
-    table.cell(hud, 0, 7, "Targets (1.5R / 3R)", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 7, tpStr, text_color=color.green, text_size=size.small)
+    table.cell(hud, 0, 8, "Targets (1.5R / 3R)", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 8, tpStr, text_color=color.green, text_size=size.small)
 
     // Live Chart Reading
     paStr = isHammer ? "🔨 PINBAR (Hammer)" : (isShootingStar ? "⭐ PINBAR (Star)" : (isBullEngulf ? "🟢 BULL ENGULF" : (isBearEngulf ? "🔴 BEAR ENGULF" : (isBullBOS ? "📈 BULL BOS" : (isBearBOS ? "📉 BEAR BOS" : "📊 STEADY CONFLUENCE")))))
-    table.cell(hud, 0, 8, "Chart Reading", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 8, paStr, text_color=color.aqua, text_size=size.small)
+    table.cell(hud, 0, 9, "Chart Reading", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 9, paStr, text_color=color.aqua, text_size=size.small)
 
 // =============================================================================
-// 7. ALERTS FOR AUTOMATION & WEB NOTIFICATIONS
+// 8. AUTOMATION BOT ALERTS (SETUP A+, A, B, C)
 // =============================================================================
-alertcondition(longTrigger, title="[QUANT] Bullish Entry Signal", message="QUANT ALERT: Bullish Trend Confirmed on {{ticker}} at {{close}}. SL: Check chart, TP1: 1.5R, TP2: 3.0R")
-alertcondition(shortTrigger, title="[QUANT] Bearish Entry Signal", message="QUANT ALERT: Bearish Trend Confirmed on {{ticker}} at {{close}}. SL: Check chart, TP1: 1.5R, TP2: 3.0R")
+alertcondition(longTrigger and (setupGrade == "A+" or setupGrade == "A"), title="[BOT] Prime Setup (A+/A) Long Signal", message="BOT ALERT: Prime Setup {{setupGrade}} LONG on {{ticker}} at {{close}}! SL: {{plot_0}}, TP1: {{plot_1}}, TP2: {{plot_2}}")
+alertcondition(shortTrigger and (setupGrade == "A+" or setupGrade == "A"), title="[BOT] Prime Setup (A+/A) Short Signal", message="BOT ALERT: Prime Setup {{setupGrade}} SHORT on {{ticker}} at {{close}}! SL: {{plot_0}}, TP1: {{plot_1}}, TP2: {{plot_2}}")
+alertcondition((longTrigger or shortTrigger) and setupGrade == "B", title="[BOT] Momentum Pullback Setup (B)", message="BOT ALERT: Setup B Pullback Signal on {{ticker}} at {{close}}.")
+alertcondition((longTrigger or shortTrigger) and setupGrade == "C", title="[BOT] Scalp Setup (C)", message="BOT ALERT: Setup C Scalp Signal on {{ticker}} at {{close}}.")
 alertcondition(isHammer or isShootingStar, title="[QUANT] Pinbar Rejection Detected", message="QUANT ALERT: Pinbar Rejection on {{ticker}} at {{close}}.")
 alertcondition(isBullBOS or isBearBOS, title="[QUANT] Break of Structure (BOS)", message="QUANT ALERT: Break of Structure on {{ticker}} at {{close}}.")
 alertcondition(isRanging and not isRanging[1], title="[QUANT] Market Entered Chop Zone", message="QUANT ALERT: {{ticker}} entered ranging/chop zone. Stand aside.")
 `;
+

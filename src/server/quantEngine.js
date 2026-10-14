@@ -529,6 +529,191 @@ function analyzeChartPriceAction(candles, symbol, currentPrice) {
   };
 }
 
+function evaluateSetupGrade({
+  isBull,
+  ema21,
+  ema55,
+  adx,
+  er,
+  hurst,
+  micro,
+  chartReading,
+  symbol,
+  currentPrice
+}) {
+  const criteria = [];
+  let points = 0;
+
+  // 1. Dual EMA Trend Ribbon Alignment (25 pts)
+  const emaAligned = isBull ? (ema21 > ema55) : (ema21 < ema55);
+  if (emaAligned) {
+    points += 25;
+    criteria.push({
+      name: 'Dual EMA Ribbon (21/55)',
+      passed: true,
+      detail: `EMA 21 ${isBull ? '>' : '<'} 55 (${ema21.toFixed(1)} vs ${ema55.toFixed(1)}) aligns with ${isBull ? 'Bullish' : 'Bearish'} trend expansion.`
+    });
+  } else {
+    criteria.push({
+      name: 'Dual EMA Ribbon (21/55)',
+      passed: false,
+      detail: `Counter-trend ribbon (${ema21.toFixed(1)} vs ${ema55.toFixed(1)}).`
+    });
+  }
+
+  // 2. Market Structure: Break of Structure (BOS) / Structural Alignment (25 pts)
+  const struct = chartReading?.structure;
+  const isBOS = struct?.label?.includes('BOS') || struct?.label?.includes('BREAK OF STRUCTURE');
+  const isTrendStruct = struct?.bias === (isBull ? 'BULLISH' : 'BEARISH');
+  if (isBOS && isTrendStruct) {
+    points += 25;
+    criteria.push({
+      name: 'Break of Structure (BOS)',
+      passed: true,
+      detail: `Confirmed ${isBull ? 'Bullish' : 'Bearish'} BOS past prior swing level.`
+    });
+  } else if (isTrendStruct) {
+    points += 18;
+    criteria.push({
+      name: 'Structural Trending Highs/Lows',
+      passed: true,
+      detail: `Market printing ${isBull ? 'Higher Highs & Higher Lows' : 'Lower Highs & Lower Lows'}.`
+    });
+  } else {
+    criteria.push({
+      name: 'Market Structure',
+      passed: false,
+      detail: struct?.details || 'Consolidation or counter-structural drift.'
+    });
+  }
+
+  // 3. Fair Value Gap (FVG) or Liquidity Sweep (20 pts)
+  const fvg = chartReading?.fvg;
+  const sweep = chartReading?.liquiditySweep;
+  const hasAlignedFvg = fvg && ((isBull && fvg.type.includes('BULLISH')) || (!isBull && fvg.type.includes('BEARISH')));
+  const hasAlignedSweep = sweep && ((isBull && sweep.type.includes('SELL-SIDE')) || (!isBull && sweep.type.includes('BUY-SIDE')));
+
+  if (hasAlignedFvg || hasAlignedSweep) {
+    points += 20;
+    criteria.push({
+      name: 'Institutional Imbalance / Sweep',
+      passed: true,
+      detail: hasAlignedSweep 
+        ? `${sweep.type} swept stops into institutional fill at ${sweep.level}.` 
+        : `Active ${fvg.type} between ${fvg.bottom} and ${fvg.top} (${fvg.gapSize} pts).`
+    });
+  } else {
+    criteria.push({
+      name: 'Institutional Imbalance / Sweep',
+      passed: false,
+      detail: 'No unmitigated FVG or stop sweep in direct alignment.'
+    });
+  }
+
+  // 4. Microstructure Orderflow Delta Dominance (15 pts)
+  const delta = micro?.deltaRatio || 0;
+  const deltaAligned = isBull ? delta > 0 : delta < 0;
+  if (deltaAligned && Math.abs(delta) >= 10) {
+    points += 15;
+    criteria.push({
+      name: 'Orderflow Delta Dominance',
+      passed: true,
+      detail: `Heavy ${isBull ? 'buyer' : 'seller'} market order aggression (${delta > 0 ? '+' : ''}${delta}%).`
+    });
+  } else if (deltaAligned) {
+    points += 10;
+    criteria.push({
+      name: 'Orderflow Delta Bias',
+      passed: true,
+      detail: `Mild ${isBull ? 'buying' : 'selling'} delta bias (${delta > 0 ? '+' : ''}${delta}%).`
+    });
+  } else {
+    criteria.push({
+      name: 'Orderflow Delta',
+      passed: false,
+      detail: `Delta diverging against direction (${delta}%).`
+    });
+  }
+
+  // 5. Kaufman ER Noise Filter & Trend Velocity (15 pts)
+  const isHighEfficiency = (er || 0.3) >= 0.35 && (adx || 20) >= 22;
+  const isPersistent = (hurst || 0.5) >= 0.55;
+  if (isHighEfficiency && isPersistent) {
+    points += 15;
+    criteria.push({
+      name: 'Noise Filter & Trend Velocity',
+      passed: true,
+      detail: `Kaufman ER ${(er || 0).toFixed(2)} + ADX ${(adx || 0).toFixed(1)} + Hurst ${(hurst || 0).toFixed(3)} (Low Noise Trend).`
+    });
+  } else if ((er || 0.3) >= 0.28 || (adx || 20) >= 18) {
+    points += 10;
+    criteria.push({
+      name: 'Moderate Trend Velocity',
+      passed: true,
+      detail: `ADX ${(adx || 0).toFixed(1)}, Kaufman ER ${(er || 0).toFixed(2)}.`
+    });
+  } else {
+    criteria.push({
+      name: 'Noise Filter & Velocity',
+      passed: false,
+      detail: `Low efficiency / range chop (ER ${(er || 0).toFixed(2)}, ADX ${(adx || 0).toFixed(1)}).`
+    });
+  }
+
+  // Grade Decision: A+, A, B, C
+  let grade = 'B';
+  let badgeClass = 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30';
+  let title = 'Standard Momentum Continuation';
+  let shortTitle = 'SETUP B';
+  let advice = 'Standard position size with ATR stop invalidation.';
+  let color = 'cyan';
+
+  if (points >= 80) {
+    grade = 'A+';
+    badgeClass = 'text-amber-300 bg-amber-500/15 border-amber-500/40 shadow-glow-amber';
+    title = 'Prime Institutional Setup (A+)';
+    shortTitle = 'SETUP A+ // PRIME';
+    advice = 'Maximum confluence: Dual Trend Ribbon, Structural BOS/CHoCH, Imbalance & Orderflow. Full Half-Kelly execution.';
+    color = 'amber';
+  } else if (points >= 65) {
+    grade = 'A';
+    badgeClass = 'text-emerald-400 bg-emerald-500/15 border-emerald-500/40 shadow-glow-bull';
+    title = 'High-Probability Trend Setup (A)';
+    shortTitle = 'SETUP A';
+    advice = 'Strong trend expansion & volume support. Execute standard risk allocation.';
+    color = 'emerald';
+  } else if (points >= 45) {
+    grade = 'B';
+    badgeClass = 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30';
+    title = 'Momentum Pullback Setup (B)';
+    shortTitle = 'SETUP B';
+    advice = 'Continuation retest or moderate efficiency. Consider 0.5x risk size.';
+    color = 'cyan';
+  } else {
+    grade = 'C';
+    badgeClass = 'text-rose-300 bg-rose-500/15 border-rose-500/30';
+    title = 'Speculative Scalp / Mean Reversion (C)';
+    shortTitle = 'SETUP C';
+    advice = 'Counter-trend or range bound chop. Reduce size to 0.25x and secure TP1 quickly.';
+    color = 'rose';
+  }
+
+  const confluencesPassed = criteria.filter(c => c.passed).length;
+
+  return {
+    grade,
+    score: points,
+    title,
+    shortTitle,
+    badgeClass,
+    advice,
+    color,
+    confluencesPassed,
+    totalConfluences: criteria.length,
+    criteria
+  };
+}
+
     // Helper to process K-lines into genuine quant signals
     const processCandles = (candles, symbol, name, category, assetType, currentPrice) => {
       const opens = candles.map(c => parseFloat(c[1]));
@@ -572,6 +757,18 @@ function analyzeChartPriceAction(candles, symbol, currentPrice) {
       ];
 
       const chartReading = analyzeChartPriceAction(candles, symbol, currentPrice);
+      const setup = evaluateSetupGrade({
+        isBull,
+        ema21,
+        ema55,
+        adx,
+        er,
+        hurst,
+        micro,
+        chartReading,
+        symbol,
+        currentPrice
+      });
 
       return {
         id: `sig-${symbol.toLowerCase()}-live`,
@@ -583,6 +780,7 @@ function analyzeChartPriceAction(candles, symbol, currentPrice) {
         type,
         isBull,
         confidence: baseConfidence,
+        setup,
         entry,
         sl,
         tp1,

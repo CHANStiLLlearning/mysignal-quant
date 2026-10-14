@@ -14,6 +14,24 @@ export const initialSignals = [
     type: 'SHORT',
     isBull: false,
     confidence: 88,
+    setup: {
+      grade: 'A+',
+      score: 92,
+      title: 'Prime Institutional Setup (A+)',
+      shortTitle: 'SETUP A+ // PRIME',
+      badgeClass: 'text-amber-300 bg-amber-500/15 border-amber-500/40 shadow-glow-amber',
+      advice: 'Maximum confluence: Dual Trend Ribbon, Structural BOS/CHoCH, Imbalance & Orderflow. Full Half-Kelly execution.',
+      color: 'amber',
+      confluencesPassed: 5,
+      totalConfluences: 5,
+      criteria: [
+        { name: 'Dual EMA Ribbon (21/55)', passed: true, detail: 'EMA 21 < 55 aligns with Bearish trend expansion.' },
+        { name: 'Structural Trending Highs/Lows', passed: true, detail: 'Market printing Lower Highs & Lower Lows.' },
+        { name: 'Institutional Imbalance / Sweep', passed: true, detail: 'Active Bearish FVG between 4112.00 and 4118.50.' },
+        { name: 'Orderflow Delta Dominance', passed: true, detail: 'Heavy seller market order aggression (-14.2%).' },
+        { name: 'Noise Filter & Trend Velocity', passed: true, detail: 'Kaufman ER 0.42 + ADX 37.0 + Hurst 0.582 (Low Noise Trend).' }
+      ]
+    },
     entry: 4105.00,
     sl: 4118.00,
     tp1: 4085.50,
@@ -76,6 +94,24 @@ export const initialSignals = [
     type: 'SHORT',
     isBull: false,
     confidence: 85,
+    setup: {
+      grade: 'A+',
+      score: 95,
+      title: 'Prime Institutional Setup (A+)',
+      shortTitle: 'SETUP A+ // PRIME',
+      badgeClass: 'text-amber-300 bg-amber-500/15 border-amber-500/40 shadow-glow-amber',
+      advice: 'Confirmed Break of Structure (BOS) with supply FVG mitigation and heavy selling delta.',
+      color: 'amber',
+      confluencesPassed: 5,
+      totalConfluences: 5,
+      criteria: [
+        { name: 'Dual EMA Ribbon (21/55)', passed: true, detail: 'EMA 21 < 55 aligns with Bearish momentum.' },
+        { name: 'Break of Structure (BOS)', passed: true, detail: 'Confirmed Bearish BOS past prior swing low.' },
+        { name: 'Institutional Imbalance / Sweep', passed: true, detail: 'Active Bearish FVG between 82180.00 and 82450.00.' },
+        { name: 'Orderflow Delta Dominance', passed: true, detail: 'Heavy seller market order aggression (-18.6%).' },
+        { name: 'Noise Filter & Trend Velocity', passed: true, detail: 'Kaufman ER 0.38 + ADX 28.2 + Hurst 0.614 (Low Noise Trend).' }
+      ]
+    },
     entry: 81900.00,
     sl: 82380.00,
     tp1: 81180.00,

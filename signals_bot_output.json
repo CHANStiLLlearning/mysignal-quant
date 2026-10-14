@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-10-15T02:25:00.000288",
+  "scan_count": 1,
+  "signals": [
+    {
+      "symbol": "BTC/USDT Bitcoin",
+      "direction": "SHORT",
+      "grade": "C",
+      "score": 1,
+      "title": "Setup C (Speculative Scalp / Chop Fade)",
+      "color_code": "\u001b[97m",
+      "advice": "Low confluence environment. Reduce position size or stand aside.",
+      "criteria": [
+        {
+          "title": "Dual EMA Trend Ribbon",
+          "desc": "Price relative to EMA21 (81851.33) & EMA55 (82394.44)",
+          "passed": true
+        },
+        {
+          "title": "Market Structure (BOS / CHoCH)",
+          "desc": "Clear breakout beyond swing low",
+          "passed": false
+        },
+        {
+          "title": "Price Action / Liquidity Sweep",
+          "desc": "Institutional rejection wick or engulfing momentum",
+          "passed": false
+        },
+        {
+          "title": "Orderflow Delta Dominance",
+          "desc": "Volume surge (10.1 vs avg 37.4) & buyer/seller delta",
+          "passed": false
+        },
+        {
+          "title": "Kaufman ER / ADX Filter",
+          "desc": "ER: 0.18 (noise filter) & ADX: 5.2 (trend velocity)",
+          "passed": false
+        }
+      ],
+      "entry": 81767.1,
+      "sl": 82055.72142857143,
+      "tp1": 81334.16785714286,
+      "tp2": 80901.23571428574,
+      "risk": 288.62142857142317,
+      "atr": 192.41428571428384,
+      "adx": 5.192006269593893,
+      "er": 0.17686968728067143,
+      "time": "2026-10-15 02:24:59"
+    }
+  ]
+}
