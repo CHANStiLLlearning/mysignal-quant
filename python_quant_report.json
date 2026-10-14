@@ -1,0 +1,105 @@
+{
+  "timestamp": "2026-10-14T18:16:21.687760+00:00",
+  "results": [
+    {
+      "symbol": "XAUUSD",
+      "name": "Gold Spot / US Dollar",
+      "pair": "PAXGUSD",
+      "current_price": 4099.06,
+      "candles_analyzed": 721,
+      "moments": {
+        "mean_log_ret": -1.3779444930738115e-05,
+        "std_log_ret": 0.0009936281159320117,
+        "annualized_vol_close": 18.599699196568153,
+        "garman_klass_vol": 13.268807584474759,
+        "parkinson_vol": 14.720586963871146,
+        "skewness": -3.2484371893163915,
+        "excess_kurtosis": 39.02624003208925,
+        "jarque_bera_stat": 46957.70363201942,
+        "jarque_bera_p": 0.0,
+        "is_gaussian": false
+      },
+      "regime": {
+        "hurst_exponent": 0.6309671914281857,
+        "regime_type": "PERSISTENT TREND (Directional Breakout)",
+        "ou_theta": 0.008222281621838702,
+        "ou_half_life_hours": 21.07526877694505
+      },
+      "microstructure": {
+        "vwap": 4155.421609338164,
+        "upper_1std": 4187.653734381883,
+        "lower_1std": 4123.189484294445,
+        "upper_2std": 4219.885859425602,
+        "lower_2std": 4090.957359250726,
+        "poc": 4182.705769230769,
+        "buy_vol_pct": 44.747574642568814,
+        "sell_vol_pct": 55.25242535743119,
+        "delta_ratio": -0.10504850714862375
+      },
+      "tail_risk": {
+        "hist_var_95_pct": 0.13023804135826822,
+        "hist_var_99_pct": 0.23345570809487626,
+        "cornish_fisher_var_95_pct": -0.024885486633867165,
+        "cvar_expected_shortfall_95_pct": 0.23720618019982018
+      },
+      "quant_verdict": {
+        "ema21": 4099.99199421426,
+        "ema55": 4119.190676585838,
+        "trend_stack": "BEARISH",
+        "vwap_position": "BELOW VWAP (Bearish Pressure)",
+        "half_kelly_optimal_risk_pct": 24.666666666666668,
+        "action": "SELL / SHORT"
+      }
+    },
+    {
+      "symbol": "BTCUSDT",
+      "name": "Bitcoin / Tether Spot",
+      "pair": "XXBTZUSD",
+      "current_price": 81521.9,
+      "candles_analyzed": 721,
+      "moments": {
+        "mean_log_ret": -4.428621565762835e-05,
+        "std_log_ret": 0.0015794087562026955,
+        "annualized_vol_close": 29.56491196531928,
+        "garman_klass_vol": 29.116303221787348,
+        "parkinson_vol": 29.227702981077197,
+        "skewness": -0.854697756680175,
+        "excess_kurtosis": 8.966234543589543,
+        "jarque_bera_stat": 2499.461847352646,
+        "jarque_bera_p": 0.0,
+        "is_gaussian": false
+      },
+      "regime": {
+        "hurst_exponent": 0.6454184144838884,
+        "regime_type": "PERSISTENT TREND (Directional Breakout)",
+        "ou_theta": 0.02064374847058834,
+        "ou_half_life_hours": 8.394153580531768
+      },
+      "microstructure": {
+        "vwap": 82740.28416388585,
+        "upper_1std": 83554.93806839458,
+        "lower_1std": 81925.63025937713,
+        "upper_2std": 84369.5919729033,
+        "lower_2std": 81110.9763548684,
+        "poc": 83167.86923076923,
+        "buy_vol_pct": 44.010696933993984,
+        "sell_vol_pct": 55.989303066006016,
+        "delta_ratio": -0.11978606132012028
+      },
+      "tail_risk": {
+        "hist_var_95_pct": 0.24757056734030944,
+        "hist_var_99_pct": 0.42497466121783134,
+        "cornish_fisher_var_95_pct": 0.1951001160322544,
+        "cvar_expected_shortfall_95_pct": 0.3906197483493942
+      },
+      "quant_verdict": {
+        "ema21": 81941.74519612691,
+        "ema55": 82510.91851911639,
+        "trend_stack": "BEARISH",
+        "vwap_position": "BELOW VWAP (Bearish Pressure)",
+        "half_kelly_optimal_risk_pct": 24.666666666666668,
+        "action": "SELL / SHORT"
+      }
+    }
+  ]
+}
