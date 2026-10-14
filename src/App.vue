@@ -197,6 +197,30 @@ const dynamicStats = ref({
   verifiedTrades: 384
 })
 
+// AI Real-Time Chart Reading State
+const chartReadings = ref({
+  XAUUSD: signals.value[0]?.chartReading || null,
+  BTCUSDT: signals.value[1]?.chartReading || null
+})
+
+const activeChartReading = computed(() => {
+  const sym = activeSymbolName.value.includes('BTC') ? 'BTCUSDT' : 'XAUUSD'
+  return chartReadings.value[sym] || (signals.value.find(s => s.symbol === sym)?.chartReading) || null
+})
+
+const isReadingChart = ref(false)
+const readActiveChart = async () => {
+  try {
+    isReadingChart.value = true
+    playTone('scan')
+    await fetchLiveMarket()
+    playTone('success')
+    triggerToast(`AI Chart Reading updated for ${activeSymbolName.value}`)
+  } finally {
+    isReadingChart.value = false
+  }
+}
+
 // News & Macro Risk Radar State
 const newsList = ref([])
 const calendarList = ref([])
@@ -215,6 +239,9 @@ const fetchLiveMarket = async () => {
     if (data && data.success) {
       tickers.value = data.tickers
       signals.value = data.signals
+      if (data.chartReadings) {
+        chartReadings.value = data.chartReadings
+      }
       if (data.news && data.news.length) {
         newsList.value = data.news
       }
@@ -557,6 +584,150 @@ onUnmounted(() => {
         <!-- TV Chart Embed Container -->
         <div class="glass-card rounded-2xl overflow-hidden border border-white/10 h-[560px] relative shadow-glass">
           <div id="tradingview_widget_container" class="w-full h-full"></div>
+        </div>
+
+        <!-- AI Real-Time Chart Reader & Price Action Decoder -->
+        <div class="glass-card rounded-2xl p-5 border border-cyan-500/20 bg-dark-900/90 space-y-4">
+          <!-- Reader Header -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-neon-cyan shadow-sm">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-extrabold text-white tracking-tight">AI Real-Time Chart Reader & Price Action Decoder</h3>
+                  <span class="text-[9px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-bold uppercase">
+                    Live {{ activeSymbolName }} Feed
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400 font-mono mt-0.5">Automated Candlestick Anatomy • Market Structure (BOS) • Fair Value Gaps (FVG)</p>
+              </div>
+            </div>
+
+            <!-- Read Chart Action Button -->
+            <button 
+              @click="readActiveChart()"
+              :disabled="isReadingChart"
+              class="px-3.5 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-neon-cyan border border-cyan-500/30 text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer self-start sm:self-auto disabled:opacity-50">
+              <svg :class="{ 'animate-spin': isReadingChart }" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{{ isReadingChart ? 'Reading Candles...' : 'Re-Read Chart' }}</span>
+            </button>
+          </div>
+
+          <!-- 4-Card Price Action Breakdown Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-mono text-xs">
+            <!-- 1. Candlestick Anatomy -->
+            <div class="p-3 rounded-xl bg-dark-850/80 border border-white/5 space-y-2">
+              <div class="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold">
+                <span>Candle Anatomy</span>
+                <span :class="activeChartReading?.lastCandle?.isBull ? 'text-emerald-400' : 'text-rose-400'" class="font-bold">
+                  {{ activeChartReading?.lastCandle?.isBull ? '▲ Bullish' : '▼ Bearish' }}
+                </span>
+              </div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Range:</span>
+                  <span class="font-bold text-white">{{ activeChartReading?.lastCandle?.range }} pts</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Body Dominance:</span>
+                  <span class="font-bold text-neon-cyan">{{ activeChartReading?.lastCandle?.bodyPct }}%</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Upper Wick:</span>
+                  <span class="font-bold text-amber-300">{{ activeChartReading?.lastCandle?.upperWickPct }}% rejection</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Lower Wick:</span>
+                  <span class="font-bold text-emerald-300">{{ activeChartReading?.lastCandle?.lowerWickPct }}% support</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Pattern Classification -->
+            <div class="p-3 rounded-xl bg-dark-850/80 border border-white/5 space-y-2">
+              <div class="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold">
+                <span>Identified Pattern</span>
+                <span 
+                  :class="activeChartReading?.pattern?.type === 'BULLISH' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (activeChartReading?.pattern?.type === 'BEARISH' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-500/10 text-slate-300 border-slate-500/20')"
+                  class="text-[9px] px-1.5 py-0.5 rounded border font-bold">
+                  {{ activeChartReading?.pattern?.type || 'NEUTRAL' }}
+                </span>
+              </div>
+              <div class="font-bold text-white text-[12px] leading-tight">
+                {{ activeChartReading?.pattern?.name || 'Evaluating Bar...' }}
+              </div>
+              <p class="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                {{ activeChartReading?.pattern?.description || 'Awaiting live pattern confirmation.' }}
+              </p>
+            </div>
+
+            <!-- 3. Market Structure & Levels -->
+            <div class="p-3 rounded-xl bg-dark-850/80 border border-white/5 space-y-2">
+              <div class="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold">
+                <span>Market Structure</span>
+                <span :class="activeChartReading?.structure?.bias === 'BULLISH' ? 'text-emerald-400' : (activeChartReading?.structure?.bias === 'BEARISH' ? 'text-rose-400' : 'text-amber-300')" class="font-bold">
+                  {{ activeChartReading?.structure?.bias || 'NEUTRAL' }}
+                </span>
+              </div>
+              <div class="font-bold text-neon-cyan text-[11px] truncate">
+                {{ activeChartReading?.structure?.label || 'CONSOLIDATION' }}
+              </div>
+              <div class="space-y-1 text-[10px]">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Fractal Resistance:</span>
+                  <span class="font-bold text-rose-400">{{ activeChartReading?.structure?.keyResistance }}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Fractal Support:</span>
+                  <span class="font-bold text-emerald-400">{{ activeChartReading?.structure?.keySupport }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Imbalance & Liquidity -->
+            <div class="p-3 rounded-xl bg-dark-850/80 border border-white/5 space-y-2">
+              <div class="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold">
+                <span>Fair Value Gap & Sweeps</span>
+                <span class="text-neon-cyan font-bold">M15 ZONES</span>
+              </div>
+              <div v-if="activeChartReading?.fvg" class="text-[10px] space-y-0.5">
+                <div class="font-bold text-amber-300">{{ activeChartReading.fvg.type }}</div>
+                <div class="text-slate-300">{{ activeChartReading.fvg.bottom }} - {{ activeChartReading.fvg.top }} ({{ activeChartReading.fvg.gapSize }} pts)</div>
+              </div>
+              <div v-else class="text-[10px] text-slate-400">
+                No active 15-min imbalance gap.
+              </div>
+              <div class="text-[10px] pt-1 border-t border-white/5">
+                <span class="text-slate-400">Liquidity Sweep: </span>
+                <span :class="activeChartReading?.liquiditySweep ? 'text-rose-400 font-bold' : 'text-slate-400'">
+                  {{ activeChartReading?.liquiditySweep ? activeChartReading.liquiditySweep.type : 'No stop run detected' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Executive Institutional Reading Narrative -->
+          <div class="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-start gap-3">
+            <span class="p-1.5 rounded-lg bg-cyan-500/10 text-neon-cyan shrink-0 mt-0.5">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </span>
+            <div class="space-y-1 font-mono">
+              <div class="text-[10px] uppercase font-bold tracking-wider text-neon-cyan">
+                Executive Price Action Reading ({{ activeSymbolName }}):
+              </div>
+              <p class="text-[11px] text-slate-200 leading-relaxed font-sans">
+                {{ activeChartReading?.executiveReading || 'Connecting to live exchange candlestick feed to decode price action...' }}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

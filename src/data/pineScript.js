@@ -126,7 +126,35 @@ if activeDir == -1 and (high >= slP or low <= tp2P)
     activeDir := 0
 
 // =============================================================================
-// 4. CHART PLOTS & VISUALS
+// 4. CHART READING ENGINE: CANDLESTICK PATTERNS, BOS & FVG
+// =============================================================================
+bodySize = math.abs(close - open)
+totalRng = high - low
+upperWk  = high - math.max(open, close)
+lowerWk  = math.min(open, close) - low
+
+// Pinbars
+isHammer       = (lowerWk >= bodySize * 2) and (upperWk <= bodySize * 0.5) and (totalRng > atrVal * 0.7)
+isShootingStar = (upperWk >= bodySize * 2) and (lowerWk <= bodySize * 0.5) and (totalRng > atrVal * 0.7)
+
+// Engulfing
+isBullEngulf   = (close > open) and (close[1] < open[1]) and (close > open[1]) and (open < close[1])
+isBearEngulf   = (close < open) and (close[1] > open[1]) and (close < open[1]) and (open > close[1])
+
+// Break of Structure (BOS)
+isBullBOS      = ta.crossover(close, swingHighest[1])
+isBearBOS      = ta.crossunder(close, swingLowest[1])
+
+// Plot Chart Reading Labels on Candles
+plotshape(isHammer, title="Hammer Rejection", style=shape.labelup, location=location.belowbar, color=color.new(color.teal, 10), text="PINBAR", textcolor=color.white, size=size.tiny)
+plotshape(isShootingStar, title="Shooting Star Rejection", style=shape.labeldown, location=location.abovebar, color=color.new(color.maroon, 10), text="PINBAR", textcolor=color.white, size=size.tiny)
+plotshape(isBullEngulf, title="Bullish Engulfing", style=shape.labelup, location=location.belowbar, color=color.new(color.green, 10), text="ENGULF", textcolor=color.white, size=size.tiny)
+plotshape(isBearEngulf, title="Bearish Engulfing", style=shape.labeldown, location=location.abovebar, color=color.new(color.red, 10), text="ENGULF", textcolor=color.white, size=size.tiny)
+plotshape(isBullBOS, title="Bullish BOS", style=shape.labelup, location=location.belowbar, color=color.new(color.blue, 10), text="BOS", textcolor=color.white, size=size.tiny)
+plotshape(isBearBOS, title="Bearish BOS", style=shape.labeldown, location=location.abovebar, color=color.new(color.purple, 10), text="BOS", textcolor=color.white, size=size.tiny)
+
+// =============================================================================
+// 5. CHART PLOTS & VISUALS
 // =============================================================================
 
 // Plot Moving Averages
@@ -147,9 +175,9 @@ plotshape(longTrigger, title="Long Signal Icon", style=shape.triangleup, locatio
 plotshape(shortTrigger, title="Short Signal Icon", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal)
 
 // =============================================================================
-// 5. ON-SCREEN HUD DASHBOARD TABLE
+// 6. ON-SCREEN HUD DASHBOARD TABLE
 // =============================================================================
-var table hud = table.new(position.top_right, 2, 8, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
+var table hud = table.new(position.top_right, 2, 9, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
 
 if barstate.islast and showTable
     // Header
@@ -193,10 +221,17 @@ if barstate.islast and showTable
     table.cell(hud, 0, 7, "Targets (1.5R / 3R)", text_color=color.silver, text_size=size.small)
     table.cell(hud, 1, 7, tpStr, text_color=color.green, text_size=size.small)
 
+    // Live Chart Reading
+    paStr = isHammer ? "🔨 PINBAR (Hammer)" : (isShootingStar ? "⭐ PINBAR (Star)" : (isBullEngulf ? "🟢 BULL ENGULF" : (isBearEngulf ? "🔴 BEAR ENGULF" : (isBullBOS ? "📈 BULL BOS" : (isBearBOS ? "📉 BEAR BOS" : "📊 STEADY CONFLUENCE")))))
+    table.cell(hud, 0, 8, "Chart Reading", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 8, paStr, text_color=color.aqua, text_size=size.small)
+
 // =============================================================================
-// 6. ALERTS FOR AUTOMATION & WEB NOTIFICATIONS
+// 7. ALERTS FOR AUTOMATION & WEB NOTIFICATIONS
 // =============================================================================
 alertcondition(longTrigger, title="[QUANT] Bullish Entry Signal", message="QUANT ALERT: Bullish Trend Confirmed on {{ticker}} at {{close}}. SL: Check chart, TP1: 1.5R, TP2: 3.0R")
 alertcondition(shortTrigger, title="[QUANT] Bearish Entry Signal", message="QUANT ALERT: Bearish Trend Confirmed on {{ticker}} at {{close}}. SL: Check chart, TP1: 1.5R, TP2: 3.0R")
+alertcondition(isHammer or isShootingStar, title="[QUANT] Pinbar Rejection Detected", message="QUANT ALERT: Pinbar Rejection on {{ticker}} at {{close}}.")
+alertcondition(isBullBOS or isBearBOS, title="[QUANT] Break of Structure (BOS)", message="QUANT ALERT: Break of Structure on {{ticker}} at {{close}}.")
 alertcondition(isRanging and not isRanging[1], title="[QUANT] Market Entered Chop Zone", message="QUANT ALERT: {{ticker}} entered ranging/chop zone. Stand aside.")
 `;

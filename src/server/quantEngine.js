@@ -375,6 +375,228 @@ function calculateMicrostructure(highs, lows, closes, volumes, opens) {
   };
 }
 
+function analyzeChartPriceAction(candles, symbol, currentPrice) {
+  if (!candles || candles.length < 20) {
+    return {
+      symbol,
+      currentPrice,
+      lastCandle: { open: currentPrice, high: currentPrice, low: currentPrice, close: currentPrice, range: 0, bodySize: 0, bodyPct: 50, upperWickPct: 25, lowerWickPct: 25, isBull: true },
+      pattern: { name: 'Neutral Equilibrium', type: 'NEUTRAL', description: 'Consolidation candle.' },
+      structure: { label: 'RANGE CONSOLIDATION', bias: 'NEUTRAL', details: 'Awaiting market breakout.', keySupport: currentPrice * 0.99, keyResistance: currentPrice * 1.01 },
+      fvg: null,
+      liquiditySweep: null,
+      executiveReading: `${symbol} is consolidating near ${currentPrice}.`
+    };
+  }
+
+  const opens = candles.map(c => parseFloat(c[1]));
+  const highs = candles.map(c => parseFloat(c[2]));
+  const lows = candles.map(c => parseFloat(c[3]));
+  const closes = candles.map(c => parseFloat(c[4]));
+  const volumes = candles.map(c => parseFloat(c[6]));
+
+  const n = closes.length;
+  const lastO = opens[n - 1];
+  const lastH = highs[n - 1];
+  const lastL = lows[n - 1];
+  const lastC = closes[n - 1];
+  const prevO = opens[n - 2];
+  const prevH = highs[n - 2];
+  const prevL = lows[n - 2];
+  const prevC = closes[n - 2];
+
+  // 1. Candlestick Anatomy
+  const totalRange = lastH - lastL || 0.0001;
+  const bodySize = Math.abs(lastC - lastO);
+  const upperWick = lastH - Math.max(lastO, lastC);
+  const lowerWick = Math.min(lastO, lastC) - lastL;
+  const bodyPct = parseFloat(((bodySize / totalRange) * 100).toFixed(1));
+  const upperWickPct = parseFloat(((upperWick / totalRange) * 100).toFixed(1));
+  const lowerWickPct = parseFloat(((lowerWick / totalRange) * 100).toFixed(1));
+  const isBullCandle = lastC >= lastO;
+
+  // Candlestick Pattern Recognition
+  let pattern = 'Standard Candle';
+  let patternType = isBullCandle ? 'BULLISH' : 'BEARISH';
+  let patternDesc = '';
+
+  if (lowerWick >= bodySize * 2 && upperWick <= bodySize * 0.5) {
+    pattern = 'Hammer / Bullish Pinbar Rejection';
+    patternType = 'BULLISH';
+    patternDesc = `Heavy buyer absorption with ${lowerWickPct}% lower wick rejecting ${lastL.toFixed(2)}.`;
+  } else if (upperWick >= bodySize * 2 && lowerWick <= bodySize * 0.5) {
+    pattern = 'Shooting Star / Bearish Pinbar Rejection';
+    patternType = 'BEARISH';
+    patternDesc = `Overhead supply rejection with ${upperWickPct}% upper wick rejecting ${lastH.toFixed(2)}.`;
+  } else if (isBullCandle && prevC < prevO && lastC > prevO && lastO < prevC) {
+    pattern = 'Bullish Engulfing Impulse';
+    patternType = 'BULLISH';
+    patternDesc = `Green body (${bodyPct}%) completely engulfs previous bear bar, confirming institutional demand.`;
+  } else if (!isBullCandle && prevC > prevO && lastC < prevO && lastO > prevC) {
+    pattern = 'Bearish Engulfing Impulse';
+    patternType = 'BEARISH';
+    patternDesc = `Red body (${bodyPct}%) engulfs previous bull bar, signaling aggressive institutional selling.`;
+  } else if (bodyPct < 15) {
+    pattern = 'Doji / Volatility Compression';
+    patternType = 'NEUTRAL';
+    patternDesc = `Tight equilibrium compression (${bodyPct}% body). Liquidity expansion imminent.`;
+  } else if (bodyPct >= 75) {
+    pattern = isBullCandle ? 'Bullish Marubozu Expansion' : 'Bearish Marubozu Expansion';
+    patternType = isBullCandle ? 'BULLISH' : 'BEARISH';
+    patternDesc = `Decisive directional velocity with ${bodyPct}% body dominance and minimal wick drag.`;
+  } else if (lastH < prevH && lastL > prevL) {
+    pattern = 'Inside Bar Consolidation';
+    patternType = 'NEUTRAL';
+    patternDesc = `Contained inside previous bar range (${prevL.toFixed(2)} - ${prevH.toFixed(2)}).`;
+  } else {
+    pattern = isBullCandle ? 'Bullish Continuation Candle' : 'Bearish Continuation Candle';
+    patternDesc = `Orderflow favoring ${isBullCandle ? 'bids' : 'offers'} with ${bodyPct}% body.`;
+  }
+
+  // 2. Market Structure: Swing Highs / Lows (3-bar fractal lookback)
+  const swings = [];
+  for (let i = 3; i < n - 2; i++) {
+    if (highs[i] > highs[i - 1] && highs[i] > highs[i - 2] && highs[i] > highs[i + 1] && highs[i] > highs[i + 2]) {
+      swings.push({ type: 'HIGH', price: highs[i], index: i });
+    }
+    if (lows[i] < lows[i - 1] && lows[i] < lows[i - 2] && lows[i] < lows[i + 1] && lows[i] < lows[i + 2]) {
+      swings.push({ type: 'LOW', price: lows[i], index: i });
+    }
+  }
+
+  const recentHighs = swings.filter(s => s.type === 'HIGH').slice(-4);
+  const recentLows = swings.filter(s => s.type === 'LOW').slice(-4);
+  const keyResistance = recentHighs.length > 0 ? parseFloat(Math.max(...recentHighs.map(s => s.price)).toFixed(2)) : parseFloat((lastH * 1.008).toFixed(2));
+  const keySupport = recentLows.length > 0 ? parseFloat(Math.min(...recentLows.map(s => s.price)).toFixed(2)) : parseFloat((lastL * 0.992).toFixed(2));
+
+  // Determine Higher Highs (HH) vs Lower Lows (LL) vs Break of Structure (BOS)
+  let structure = 'CONSOLIDATION / EQUILIBRIUM';
+  let structureBias = 'NEUTRAL';
+  let structureDetails = '';
+
+  if (recentHighs.length >= 2 && recentLows.length >= 2) {
+    const lastSh = recentHighs[recentHighs.length - 1].price;
+    const prevSh = recentHighs[recentHighs.length - 2].price;
+    const lastSl = recentLows[recentLows.length - 1].price;
+    const prevSl = recentLows[recentLows.length - 2].price;
+
+    if (lastC > lastSh) {
+      structure = 'BOS (BULLISH BREAK OF STRUCTURE)';
+      structureBias = 'BULLISH';
+      structureDetails = `Price breached previous swing high at ${lastSh.toFixed(2)}, confirming upward expansion.`;
+    } else if (lastC < lastSl) {
+      structure = 'BOS (BEARISH BREAK OF STRUCTURE)';
+      structureBias = 'BEARISH';
+      structureDetails = `Price closed below previous swing low at ${lastSl.toFixed(2)}, confirming downward breakdown.`;
+    } else if (lastSh > prevSh && lastSl > prevSl) {
+      structure = 'BULLISH STRUCTURE (HH / HL)';
+      structureBias = 'BULLISH';
+      structureDetails = `Ascending Higher Highs (${lastSh.toFixed(2)} > ${prevSh.toFixed(2)}) and Higher Lows (${lastSl.toFixed(2)} > ${prevSl.toFixed(2)}).`;
+    } else if (lastSh < prevSh && lastSl < prevSl) {
+      structure = 'BEARISH STRUCTURE (LH / LL)';
+      structureBias = 'BEARISH';
+      structureDetails = `Descending Lower Highs (${lastSh.toFixed(2)} < ${prevSh.toFixed(2)}) and Lower Lows (${lastSl.toFixed(2)} < ${prevSl.toFixed(2)}).`;
+    } else {
+      structure = 'CHOP / CONSOLIDATION RANGE';
+      structureBias = 'NEUTRAL';
+      structureDetails = `Price oscillating between resistance at ${lastSh.toFixed(2)} and support at ${lastSl.toFixed(2)}.`;
+    }
+  } else {
+    structure = isBullCandle ? 'BULLISH MOMENTUM' : 'BEARISH MOMENTUM';
+    structureBias = isBullCandle ? 'BULLISH' : 'BEARISH';
+    structureDetails = `Short-term ${isBullCandle ? 'buyer' : 'seller'} velocity dominating M15 structure.`;
+  }
+
+  // 3. Fair Value Gaps (FVG) in the last 15 candles
+  const fvgs = [];
+  for (let i = Math.max(2, n - 15); i < n; i++) {
+    if (lows[i] > highs[i - 2]) {
+      fvgs.push({
+        type: 'BULLISH FVG (Demand Imbalance)',
+        top: parseFloat(lows[i].toFixed(2)),
+        bottom: parseFloat(highs[i - 2].toFixed(2)),
+        gapSize: parseFloat((lows[i] - highs[i - 2]).toFixed(2))
+      });
+    }
+    if (highs[i] < lows[i - 2]) {
+      fvgs.push({
+        type: 'BEARISH FVG (Supply Imbalance)',
+        top: parseFloat(lows[i - 2].toFixed(2)),
+        bottom: parseFloat(highs[i].toFixed(2)),
+        gapSize: parseFloat((lows[i - 2] - highs[i]).toFixed(2))
+      });
+    }
+  }
+  const activeFvg = fvgs.length > 0 ? fvgs[fvgs.length - 1] : null;
+
+  // 4. Liquidity Sweeps
+  let liquiditySweep = null;
+  if (recentHighs.length > 0) {
+    const lastPeak = recentHighs[recentHighs.length - 1].price;
+    if (lastH > lastPeak && lastC < lastPeak) {
+      liquiditySweep = {
+        type: 'BUY-SIDE LIQUIDITY SWEEP (Bearish Trap)',
+        level: parseFloat(lastPeak.toFixed(2)),
+        note: `Price wicked above ${lastPeak.toFixed(2)} triggering buy stops before pulling back inside.`
+      };
+    }
+  }
+  if (recentLows.length > 0 && !liquiditySweep) {
+    const lastTrough = recentLows[recentLows.length - 1].price;
+    if (lastL < lastTrough && lastC > lastTrough) {
+      liquiditySweep = {
+        type: 'SELL-SIDE LIQUIDITY SWEEP (Bullish Spring)',
+        level: parseFloat(lastTrough.toFixed(2)),
+        note: `Price flushed beneath ${lastTrough.toFixed(2)} hunting sell stops before bouncing upward.`
+      };
+    }
+  }
+
+  // 5. Plain-English Executive "Chart Read"
+  const s1 = `${symbol} is showing ${structure.toLowerCase()} on the M15 timeframe.`;
+  const s2 = `The active candle formed a ${pattern} (${bodyPct}% body, ${upperWickPct}% upper wick rejection, ${lowerWickPct}% lower wick support).`;
+  const s3 = activeFvg
+    ? `An active ${activeFvg.type} was detected between ${activeFvg.bottom} and ${activeFvg.top} (${activeFvg.gapSize} pts).`
+    : `Price is trading between swing support at ${keySupport} and overhead resistance at ${keyResistance}.`;
+  const s4 = liquiditySweep
+    ? `Caution: ${liquiditySweep.type} confirmed at ${liquiditySweep.level}.`
+    : `Primary orderflow conviction remains ${structureBias.toLowerCase()} while trading within structural boundaries.`;
+
+  const executiveReading = `${s1} ${s2} ${s3} ${s4}`;
+
+  return {
+    symbol,
+    currentPrice,
+    lastCandle: {
+      open: parseFloat(lastO.toFixed(2)),
+      high: parseFloat(lastH.toFixed(2)),
+      low: parseFloat(lastL.toFixed(2)),
+      close: parseFloat(lastC.toFixed(2)),
+      range: parseFloat(totalRange.toFixed(2)),
+      bodySize: parseFloat(bodySize.toFixed(2)),
+      bodyPct,
+      upperWickPct,
+      lowerWickPct,
+      isBull: isBullCandle
+    },
+    pattern: {
+      name: pattern,
+      type: patternType,
+      description: patternDesc
+    },
+    structure: {
+      label: structure,
+      bias: structureBias,
+      details: structureDetails,
+      keySupport,
+      keyResistance
+    },
+    fvg: activeFvg,
+    liquiditySweep,
+    executiveReading
+  };
+}
+
     // Helper to process K-lines into genuine quant signals
     const processCandles = (candles, symbol, name, category, assetType, currentPrice) => {
       const opens = candles.map(c => parseFloat(c[1]));
@@ -416,6 +638,8 @@ function calculateMicrostructure(highs, lows, closes, volumes, opens) {
         `Orderflow Delta ${micro.deltaRatio > 0 ? '+' : ''}${micro.deltaRatio}% (${micro.deltaRatio < 0 ? 'Selling Dominance' : 'Buying Dominance'})`,
         `Dynamic ATR Invalidation ${atr.toFixed(2)} pts`
       ];
+
+      const chartReading = analyzeChartPriceAction(candles, symbol, currentPrice);
 
       return {
         id: `sig-${symbol.toLowerCase()}-live`,
@@ -460,6 +684,7 @@ function calculateMicrostructure(highs, lows, closes, volumes, opens) {
           cvar95: moments.cvar95,
           halfKellyPct
         },
+        chartReading,
         timestamp: 'Live Feed',
         status: 'ACTIVE'
       };
@@ -537,6 +762,10 @@ function calculateMicrostructure(highs, lows, closes, volumes, opens) {
       lastUpdated: new Date().toISOString(),
       tickers,
       signals,
+      chartReadings: {
+        XAUUSD: signals[0].chartReading,
+        BTCUSDT: signals[1].chartReading
+      },
       news,
       economicCalendar,
       stats

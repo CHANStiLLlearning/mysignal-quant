@@ -53,6 +53,16 @@ export const initialSignals = [
       cvar95: 0.41,
       halfKellyPct: 3.4
     },
+    chartReading: {
+      symbol: 'XAUUSD',
+      currentPrice: 4105.00,
+      lastCandle: { open: 4108.50, high: 4111.00, low: 4103.20, close: 4105.00, range: 7.80, bodySize: 3.50, bodyPct: 44.9, upperWickPct: 32.1, lowerWickPct: 23.1, isBull: false },
+      pattern: { name: 'Bearish Continuation', type: 'BEARISH', description: 'Orderflow favoring offers with 44.9% body dominance.' },
+      structure: { label: 'BEARISH STRUCTURE (LH / LL)', bias: 'BEARISH', details: 'Descending Lower Highs and Lower Lows on M15 timeframe.', keySupport: 4085.00, keyResistance: 4124.50 },
+      fvg: { type: 'BEARISH FVG (Supply Imbalance)', top: 4118.50, bottom: 4112.00, gapSize: 6.50 },
+      liquiditySweep: null,
+      executiveReading: 'Gold (XAUUSD) is exhibiting bearish market structure (Lower Highs & Lower Lows) on the M15 timeframe. The active candle formed a Bearish Continuation with 44.9% body dominance. Active imbalance: Bearish FVG between 4112.00 and 4118.50. Primary orderflow conviction remains bearish while price stays below 4124.50 resistance.'
+    },
     timestamp: 'Live Feed',
     status: 'ACTIVE'
   },
@@ -104,6 +114,16 @@ export const initialSignals = [
       histVar95: 0.74,
       cvar95: 1.12,
       halfKellyPct: 2.8
+    },
+    chartReading: {
+      symbol: 'BTCUSDT',
+      currentPrice: 81900.00,
+      lastCandle: { open: 82150.00, high: 82280.00, low: 81820.00, close: 81900.00, range: 460.00, bodySize: 250.00, bodyPct: 54.3, upperWickPct: 28.3, lowerWickPct: 17.4, isBull: false },
+      pattern: { name: 'Bearish Continuation', type: 'BEARISH', description: 'Orderflow favoring sellers with 54.3% body dominance.' },
+      structure: { label: 'BOS (BEARISH BREAK OF STRUCTURE)', bias: 'BEARISH', details: 'Price closed below previous swing low, confirming downward expansion.', keySupport: 81400.00, keyResistance: 82950.00 },
+      fvg: { type: 'BEARISH FVG (Supply Imbalance)', top: 82450.00, bottom: 82180.00, gapSize: 270.00 },
+      liquiditySweep: null,
+      executiveReading: 'Bitcoin (BTCUSDT) is exhibiting a bearish Break of Structure (BOS) on the M15 timeframe. The active candle formed a Bearish Continuation with 54.3% body dominance. Active imbalance: Bearish FVG between 82180.00 and 82450.00. Primary orderflow conviction remains bearish below 82950.00.'
     },
     timestamp: 'Live Feed',
     status: 'ACTIVE'
