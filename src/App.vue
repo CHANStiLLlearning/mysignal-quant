@@ -438,7 +438,7 @@ onUnmounted(() => {
               'flex items-center gap-3 px-3 py-1.5 rounded-lg border text-xs font-mono transition-all shrink-0 cursor-pointer'
             ]">
             <span class="font-bold">{{ t.symbol }}</span>
-            <span class="text-slate-400">${{ t.price >= 100 ? t.price.toLocaleString('en-US', {minimumFractionDigits: 2}) : t.price }}</span>
+            <span class="text-slate-400">{{ t.price >= 100 ? t.price.toLocaleString('en-US', {minimumFractionDigits: 2}) : t.price }}</span>
             <span :class="t.change >= 0 ? 'text-emerald-400' : 'text-rose-400'" class="font-bold">
               {{ t.change >= 0 ? '+' : '' }}{{ t.change }}%
             </span>
@@ -623,19 +623,19 @@ onUnmounted(() => {
               <div class="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
                 <div class="p-2.5 rounded-xl bg-dark-900/60 border border-white/5">
                   <div class="text-[10px] text-slate-400">ENTRY LEVEL</div>
-                  <div class="font-bold text-white mt-0.5">${{ sig.entry }}</div>
+                  <div class="font-bold text-white mt-0.5">{{ sig.entry }}</div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
                   <div class="text-[10px] text-rose-300">STOP LOSS (ATR)</div>
-                  <div class="font-bold text-rose-400 mt-0.5">${{ sig.sl }}</div>
+                  <div class="font-bold text-rose-400 mt-0.5">{{ sig.sl }}</div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <div class="text-[10px] text-emerald-300">TARGET 1 (1.5R)</div>
-                  <div class="font-bold text-emerald-400 mt-0.5">${{ sig.tp1 }}</div>
+                  <div class="font-bold text-emerald-400 mt-0.5">{{ sig.tp1 }}</div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <div class="text-[10px] text-emerald-300">TARGET 2 (3.0R)</div>
-                  <div class="font-bold text-emerald-400 mt-0.5">${{ sig.tp2 }}</div>
+                  <div class="font-bold text-emerald-400 mt-0.5">{{ sig.tp2 }}</div>
                 </div>
               </div>
 
@@ -884,13 +884,12 @@ onUnmounted(() => {
             <!-- Balance & Risk Row -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div class="space-y-1.5">
-                <label class="text-slate-400 uppercase tracking-wider text-[11px]">Account Equity ($ USD)</label>
+                <label class="text-slate-400 uppercase tracking-wider text-[11px]">Account Equity</label>
                 <div class="relative">
-                  <span class="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
                   <input 
                     type="number" 
                     v-model.number="calcBalance" 
-                    class="w-full bg-dark-900 border border-white/10 focus:border-neon-cyan focus:outline-none rounded-xl pl-7 pr-3 py-2 text-white font-bold"
+                    class="w-full bg-dark-900 border border-white/10 focus:border-neon-cyan focus:outline-none rounded-xl px-3 py-2 text-white font-bold"
                   />
                 </div>
               </div>
@@ -978,7 +977,7 @@ onUnmounted(() => {
             <div class="space-y-4">
               <div class="flex items-center justify-between pb-3 border-b border-white/5 font-mono text-xs">
                 <span class="text-slate-400 uppercase">Risk Allocation:</span>
-                <span class="font-extrabold text-rose-400 text-sm">${{ maxRiskAmount.toFixed(2) }} USD</span>
+                <span class="font-extrabold text-rose-400 text-sm">{{ maxRiskAmount.toFixed(2) }}</span>
               </div>
 
               <!-- Main Position Sizing Hero Pill -->
@@ -1006,7 +1005,7 @@ onUnmounted(() => {
                 </div>
                 <div class="p-2.5 rounded-xl bg-dark-850 border border-white/5">
                   <div class="text-[10px] text-slate-400">POTENTIAL PROFIT</div>
-                  <div class="font-bold text-emerald-400 mt-0.5">+${{ calculatedProfit }}</div>
+                  <div class="font-bold text-emerald-400 mt-0.5">+{{ calculatedProfit }}</div>
                 </div>
               </div>
             </div>

@@ -301,7 +301,7 @@ export async function fetchLiveMarketData() {
         date: 'First Friday Monthly',
         impact: 'HIGH VOLATILITY',
         affected: 'XAUUSD',
-        biasNote: 'Surprise job growth delays Fed easing and triggers rapid $20-$40 Gold volatility whipsaws.',
+        biasNote: 'Surprise job growth delays Fed easing and triggers rapid 20-40 pts Gold volatility whipsaws.',
         status: 'WATCHLIST'
       },
       {
@@ -310,7 +310,7 @@ export async function fetchLiveMarketData() {
         date: 'Daily Market Close',
         impact: 'HIGH IMPACT',
         affected: 'BTCUSDT',
-        biasNote: 'Sustained net inflows (>+$200M) validate structural spot accumulation.',
+        biasNote: 'Sustained net inflows (>+200M) validate structural spot accumulation.',
         status: 'ACTIVE INFLOW'
       }
     ];
