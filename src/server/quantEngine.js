@@ -208,17 +208,189 @@ export async function fetchLiveMarketData() {
       }
     ];
 
+// Deep Quantitative Mathematical Engines (Ported from Institutional Python Suite)
+
+function calculateHurst(prices, lags = [8, 16, 32, 64]) {
+  if (prices.length < 128) return 0.55;
+  const rsValues = [];
+  const validLags = [];
+
+  for (const lag of lags) {
+    const nChunks = Math.floor(prices.length / lag);
+    if (nChunks === 0) continue;
+    let sumRs = 0;
+    let validChunks = 0;
+
+    for (let c = 0; c < nChunks; c++) {
+      const chunk = prices.slice(c * lag, (c + 1) * lag);
+      const returns = [];
+      for (let i = 1; i < chunk.length; i++) {
+        returns.push(Math.log(chunk[i] / chunk[i - 1]));
+      }
+      if (returns.length < 2) continue;
+      const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+      const dev = returns.map(r => r - mean);
+      
+      let cum = 0;
+      let maxCum = -Infinity;
+      let minCum = Infinity;
+      let varSum = 0;
+      for (const d of dev) {
+        cum += d;
+        if (cum > maxCum) maxCum = cum;
+        if (cum < minCum) minCum = cum;
+        varSum += d * d;
+      }
+      const s = Math.sqrt(varSum / (returns.length - 1));
+      const r = maxCum - minCum;
+      if (s > 1e-12 && r > 1e-12) {
+        sumRs += (r / s);
+        validChunks++;
+      }
+    }
+    if (validChunks > 0) {
+      rsValues.push(sumRs / validChunks);
+      validLags.push(lag);
+    }
+  }
+
+  if (validLags.length < 2) return 0.55;
+  // Linear regression log(lag) vs log(rs)
+  const x = validLags.map(l => Math.log(l));
+  const y = rsValues.map(v => Math.log(v));
+  const xMean = x.reduce((a, b) => a + b, 0) / x.length;
+  const yMean = y.reduce((a, b) => a + b, 0) / y.length;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < x.length; i++) {
+    num += (x[i] - xMean) * (y[i] - yMean);
+    den += (x[i] - xMean) ** 2;
+  }
+  const hurst = den !== 0 ? num / den : 0.55;
+  return Math.max(0.05, Math.min(0.95, parseFloat(hurst.toFixed(3))));
+}
+
+function calculateMoments(closes) {
+  const returns = [];
+  for (let i = 1; i < closes.length; i++) {
+    returns.push(Math.log(closes[i] / closes[i - 1]));
+  }
+  const n = returns.length;
+  if (n < 10) return { mean: 0, std: 0.01, annualizedVol: 20, skewness: 0, excessKurtosis: 0, jarqueBera: 0, histVar95: 0.2, cvar95: 0.3 };
+  
+  const mean = returns.reduce((a, b) => a + b, 0) / n;
+  let varSum = 0;
+  for (const r of returns) varSum += (r - mean) ** 2;
+  const std = Math.sqrt(varSum / (n - 1));
+
+  let skewSum = 0;
+  let kurtSum = 0;
+  for (const r of returns) {
+    const z = (r - mean) / (std || 1e-12);
+    skewSum += z ** 3;
+    kurtSum += z ** 4;
+  }
+  const skewness = parseFloat((skewSum / n).toFixed(3));
+  const excessKurtosis = parseFloat(((kurtSum / n) - 3).toFixed(2));
+  const jarqueBera = parseFloat(((n / 6) * (skewness ** 2 + (excessKurtosis ** 2) / 4)).toFixed(1));
+
+  // Annualized Volatility (96 bars/day * 365)
+  const annualizedVol = parseFloat((std * Math.sqrt(365 * 96) * 100).toFixed(2));
+
+  // Historical VaR & CVaR (95%)
+  const sorted = [...returns].sort((a, b) => a - b);
+  const idx95 = Math.floor(n * 0.05);
+  const histVar95 = parseFloat((Math.abs(sorted[idx95]) * 100).toFixed(3));
+  const tailReturns = sorted.slice(0, idx95 + 1);
+  const cvar95 = parseFloat((Math.abs(tailReturns.reduce((a, b) => a + b, 0) / (tailReturns.length || 1)) * 100).toFixed(3));
+
+  return { mean, std, annualizedVol, skewness, excessKurtosis, jarqueBera, histVar95, cvar95 };
+}
+
+function calculateMicrostructure(highs, lows, closes, volumes, opens) {
+  let cumVol = 0;
+  let cumPV = 0;
+  const n = closes.length;
+  let buyVol = 0;
+  let sellVol = 0;
+
+  for (let i = 0; i < n; i++) {
+    const tp = (highs[i] + lows[i] + closes[i]) / 3;
+    const v = volumes[i];
+    cumVol += v;
+    cumPV += tp * v;
+    if (closes[i] >= opens[i]) {
+      buyVol += v;
+    } else {
+      sellVol += v;
+    }
+  }
+
+  const vwap = cumVol > 0 ? cumPV / cumVol : closes[n - 1];
+  
+  // VWAP Standard Deviation
+  let cumSqDiff = 0;
+  for (let i = 0; i < n; i++) {
+    const tp = (highs[i] + lows[i] + closes[i]) / 3;
+    cumSqDiff += ((tp - vwap) ** 2) * volumes[i];
+  }
+  const std = cumVol > 0 ? Math.sqrt(cumSqDiff / cumVol) : 10;
+
+  // Point of Control (POC) via 30 histogram bins
+  const minP = Math.min(...lows);
+  const maxP = Math.max(...highs);
+  const binCount = 30;
+  const binWidth = (maxP - minP) / binCount || 1;
+  const bins = new Array(binCount).fill(0);
+
+  for (let i = 0; i < n; i++) {
+    const bIdx = Math.min(binCount - 1, Math.max(0, Math.floor((closes[i] - minP) / binWidth)));
+    bins[bIdx] += volumes[i];
+  }
+  let maxBin = 0;
+  let maxIdx = 0;
+  for (let b = 0; b < binCount; b++) {
+    if (bins[b] > maxBin) {
+      maxBin = bins[b];
+      maxIdx = b;
+    }
+  }
+  const poc = parseFloat((minP + (maxIdx + 0.5) * binWidth).toFixed(2));
+
+  const totalVol = buyVol + sellVol;
+  const deltaRatio = totalVol > 0 ? parseFloat((((buyVol - sellVol) / totalVol) * 100).toFixed(2)) : 0;
+  const buyVolPct = totalVol > 0 ? parseFloat(((buyVol / totalVol) * 100).toFixed(1)) : 50;
+  const sellVolPct = totalVol > 0 ? parseFloat(((sellVol / totalVol) * 100).toFixed(1)) : 50;
+
+  return {
+    vwap: parseFloat(vwap.toFixed(2)),
+    upper1Std: parseFloat((vwap + std).toFixed(2)),
+    lower1Std: parseFloat((vwap - std).toFixed(2)),
+    upper2Std: parseFloat((vwap + 2 * std).toFixed(2)),
+    lower2Std: parseFloat((vwap - 2 * std).toFixed(2)),
+    poc,
+    deltaRatio,
+    buyVolPct,
+    sellVolPct
+  };
+}
+
     // Helper to process K-lines into genuine quant signals
     const processCandles = (candles, symbol, name, category, assetType, currentPrice) => {
+      const opens = candles.map(c => parseFloat(c[1]));
       const highs = candles.map(c => parseFloat(c[2]));
       const lows = candles.map(c => parseFloat(c[3]));
       const closes = candles.map(c => parseFloat(c[4]));
+      const volumes = candles.map(c => parseFloat(c[6]));
 
       const ema21 = calculateEMA(closes, 21);
       const ema55 = calculateEMA(closes, 55);
       const atr = calculateATR(highs, lows, closes, 14);
       const er = calculateKaufmanER(closes, 14);
       const { adx } = calculateADX(highs, lows, closes, 14);
+      const hurst = calculateHurst(closes);
+      const moments = calculateMoments(closes);
+      const micro = calculateMicrostructure(highs, lows, closes, volumes, opens);
 
       const isBull = ema21 >= ema55;
       const type = isBull ? 'LONG' : 'SHORT';
@@ -230,13 +402,18 @@ export async function fetchLiveMarketData() {
       const tp2 = parseFloat((isBull ? entry + (riskPts * 3.0) : entry - (riskPts * 3.0)).toFixed(2));
       const tp3 = parseFloat((isBull ? entry + (riskPts * 4.5) : entry - (riskPts * 4.5)).toFixed(2));
 
-      // Algorithmic conviction based on ADX & ER
-      const baseConfidence = Math.min(98, Math.max(76, Math.round(50 + (adx * 0.7) + (er * 35))));
+      // Half-Kelly optimal risk allocation
+      const pWin = isBull ? (micro.deltaRatio > 0 ? 0.62 : 0.52) : (micro.deltaRatio < 0 ? 0.62 : 0.52);
+      const halfKellyPct = parseFloat((Math.max(1, ((pWin * 3.0 - (1 - pWin)) / 3.0) * 50)).toFixed(2));
+
+      // Algorithmic conviction based on ADX & ER & Hurst
+      const baseConfidence = Math.min(98, Math.max(76, Math.round(45 + (adx * 0.6) + (er * 25) + (hurst * 30))));
 
       const factors = [
         `EMA 21 ${isBull ? '>' : '<'} 55 Ribbon (${ema21.toFixed(1)})`,
-        `Wilder ADX ${adx.toFixed(1)} (${adx >= 25 ? 'Strong Trend' : 'Consolidation'})`,
-        `Kaufman ER ${er.toFixed(2)} (${er >= 0.35 ? 'Low Noise' : 'Chop Filter'})`,
+        `Hurst Exponent ${hurst} (${hurst > 0.55 ? 'Persistent Trend' : (hurst < 0.45 ? 'Mean Reverting' : 'Noise')})`,
+        `Intraday VWAP ${micro.vwap} (POC: ${micro.poc})`,
+        `Orderflow Delta ${micro.deltaRatio > 0 ? '+' : ''}${micro.deltaRatio}% (${micro.deltaRatio < 0 ? 'Selling Dominance' : 'Buying Dominance'})`,
         `Dynamic ATR Invalidation ${atr.toFixed(2)} pts`
       ];
 
@@ -263,7 +440,25 @@ export async function fetchLiveMarketData() {
           ema55,
           adx,
           er,
-          atr
+          atr,
+          hurst,
+          regime: hurst > 0.55 ? 'PERSISTENT TREND (Directional Breakout)' : (hurst < 0.45 ? 'MEAN REVERTING (Range Fade)' : 'RANDOM WALK NOISE'),
+          annualizedVol: moments.annualizedVol,
+          skewness: moments.skewness,
+          excessKurtosis: moments.excessKurtosis,
+          jarqueBera: moments.jarqueBera,
+          vwap: micro.vwap,
+          upper1Std: micro.upper1Std,
+          lower1Std: micro.lower1Std,
+          upper2Std: micro.upper2Std,
+          lower2Std: micro.lower2Std,
+          poc: micro.poc,
+          deltaRatio: micro.deltaRatio,
+          buyVolPct: micro.buyVolPct,
+          sellVolPct: micro.sellVolPct,
+          histVar95: moments.histVar95,
+          cvar95: moments.cvar95,
+          halfKellyPct
         },
         timestamp: 'Live Feed',
         status: 'ACTIVE'
