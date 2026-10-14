@@ -16,67 +16,6 @@ function fetchJson(url, headers = {}) {
   });
 }
 
-function fetchRss(url) {
-  return new Promise((resolve) => {
-    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(data));
-    }).on('error', () => resolve(''));
-  });
-}
-
-function evaluateSentiment(title) {
-  const t = title.toLowerCase();
-  let bullScore = 0;
-  let bearScore = 0;
-
-  const bullKeywords = ['surge', 'rally', 'rallies', 'gain', 'gains', 'jump', 'jumps', 'high', 'highest', 'bull', 'bullish', 'boost', 'boosts', 'climb', 'climbs', 'record', 'soar', 'soars', 'inflow', 'inflows', 'breakout'];
-  const bearKeywords = ['drop', 'drops', 'fall', 'falls', 'plunge', 'plunges', 'dump', 'dumps', 'low', 'lowest', 'bear', 'bearish', 'slip', 'slips', 'sink', 'sinks', 'slump', 'slumps', 'outflow', 'outflows', 'loss', 'losses', 'retreat'];
-
-  for (const w of bullKeywords) {
-    if (t.includes(w)) bullScore++;
-  }
-  for (const w of bearKeywords) {
-    if (t.includes(w)) bearScore++;
-  }
-
-  if (bullScore > bearScore) return 'BULLISH';
-  if (bearScore > bullScore) return 'BEARISH';
-  return 'NEUTRAL';
-}
-
-function parseNewsItems(xml, asset) {
-  const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
-  return items.slice(0, 4).map((item, idx) => {
-    const titleMatch = item.match(/<title>([\s\S]*?)<\/title>/);
-    const linkMatch = item.match(/<link>([\s\S]*?)<\/link>/);
-    const dateMatch = item.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-    const sourceMatch = item.match(/<source[^>]*>([\s\S]*?)<\/source>/);
-
-    let rawTitle = titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"') : 'Market Catalyst';
-    let source = sourceMatch ? sourceMatch[1] : 'Market Wire';
-    if (rawTitle.includes(' - ')) {
-      const parts = rawTitle.split(' - ');
-      source = parts.pop();
-      rawTitle = parts.join(' - ');
-    }
-
-    const sentiment = evaluateSentiment(rawTitle);
-
-    return {
-      id: `${asset.toLowerCase()}-${idx}`,
-      asset,
-      title: rawTitle,
-      source,
-      time: dateMatch ? new Date(dateMatch[1]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
-      link: linkMatch ? linkMatch[1] : '#',
-      impact: idx === 0 ? 'HIGH' : (idx === 1 ? 'MEDIUM' : 'NORMAL'),
-      sentiment
-    };
-  });
-}
-
 // Indicator Math
 function calculateEMA(prices, period) {
   if (prices.length < period) return prices[prices.length - 1] || 0;
@@ -160,19 +99,12 @@ function calculateADX(highs, lows, closes, period = 14) {
 
 export async function fetchLiveMarketData() {
   try {
-    // Fetch live market data and news in parallel
-    const [krakenTickers, krakenGoldOHLC, krakenBtcOHLC, goldXml, btcXml] = await Promise.all([
+    // Fetch live market data in parallel
+    const [krakenTickers, krakenGoldOHLC, krakenBtcOHLC] = await Promise.all([
       fetchJson('https://api.kraken.com/0/public/Ticker?pair=XXBTZUSD,PAXGUSD'),
       fetchJson('https://api.kraken.com/0/public/OHLC?pair=PAXGUSD&interval=15'),
-      fetchJson('https://api.kraken.com/0/public/OHLC?pair=XXBTZUSD&interval=15'),
-      fetchRss('https://news.google.com/rss/search?q=Gold+price+OR+XAUUSD+OR+Federal+Reserve&hl=en-US&gl=US&ceid=US:en'),
-      fetchRss('https://news.google.com/rss/search?q=Bitcoin+BTC+market+OR+Crypto+ETF&hl=en-US&gl=US&ceid=US:en')
+      fetchJson('https://api.kraken.com/0/public/OHLC?pair=XXBTZUSD&interval=15')
     ]);
-
-    // Parse Live News
-    const goldNews = parseNewsItems(goldXml, 'XAUUSD');
-    const btcNews = parseNewsItems(btcXml, 'BTCUSDT');
-    const news = [...goldNews, ...btcNews];
 
     // Real Gold Metrics
     const goldPrice = parseFloat(krakenTickers.result.PAXGUSD.c[0]);
@@ -695,46 +627,6 @@ function analyzeChartPriceAction(candles, symbol, currentPrice) {
       processCandles(krakenBtcOHLC.result.XXBTZUSD, 'BTCUSDT', 'Bitcoin / Tether', 'crypto', 'crypto', btcPrice),
     ];
 
-    // High-Impact Macro & Crypto Catalysts
-    const economicCalendar = [
-      {
-        id: 'ec-1',
-        event: 'US Core Consumer Price Index (CPI YoY)',
-        date: 'Scheduled Monthly',
-        impact: 'HIGH VOLATILITY',
-        affected: 'XAUUSD & BTCUSDT',
-        biasNote: 'Above-forecast inflation strengthens USD/DXY (Bearish Gold/BTC); cooler inflation fuels breakout rally.',
-        status: 'ACTIVE MONITOR'
-      },
-      {
-        id: 'ec-2',
-        event: 'Federal Reserve FOMC Interest Rate Decision & Powell Speech',
-        date: 'FOMC Meeting Cycle',
-        impact: 'MAX VOLATILITY',
-        affected: 'XAUUSD & BTCUSDT',
-        biasNote: 'Dovish interest rate pauses/cuts expand global dollar liquidity into Gold & Bitcoin.',
-        status: 'CRITICAL EVENT'
-      },
-      {
-        id: 'ec-3',
-        event: 'US Non-Farm Payrolls (NFP) & Hourly Wages',
-        date: 'First Friday Monthly',
-        impact: 'HIGH VOLATILITY',
-        affected: 'XAUUSD',
-        biasNote: 'Surprise job growth delays Fed easing and triggers rapid 20-40 pts Gold volatility whipsaws.',
-        status: 'WATCHLIST'
-      },
-      {
-        id: 'ec-4',
-        event: 'Spot Bitcoin ETF Net Flow Tally (Daily Institutional Volumes)',
-        date: 'Daily Market Close',
-        impact: 'HIGH IMPACT',
-        affected: 'BTCUSDT',
-        biasNote: 'Sustained net inflows (>+200M) validate structural spot accumulation.',
-        status: 'ACTIVE INFLOW'
-      }
-    ];
-
     // Calculate live real-time statistics from real market candles
     const goldMetrics = signals[0].metrics || { adx: 32, er: 0.4 };
     const btcMetrics = signals[1].metrics || { adx: 32, er: 0.4 };
@@ -766,12 +658,10 @@ function analyzeChartPriceAction(candles, symbol, currentPrice) {
         XAUUSD: signals[0].chartReading,
         BTCUSDT: signals[1].chartReading
       },
-      news,
-      economicCalendar,
       stats
     };
   } catch (err) {
-    console.error('Error fetching live Gold/BTC market data & news:', err);
+    console.error('Error fetching live Gold/BTC market data:', err);
     throw err;
   }
 }

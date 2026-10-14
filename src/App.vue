@@ -221,16 +221,6 @@ const readActiveChart = async () => {
   }
 }
 
-// News & Macro Risk Radar State
-const newsList = ref([])
-const calendarList = ref([])
-const activeNewsFilter = ref('all')
-
-const filteredNews = computed(() => {
-  if (activeNewsFilter.value === 'all') return newsList.value
-  return newsList.value.filter(n => n.asset === activeNewsFilter.value)
-})
-
 const fetchLiveMarket = async () => {
   try {
     isLiveLoading.value = true
@@ -241,12 +231,6 @@ const fetchLiveMarket = async () => {
       signals.value = data.signals
       if (data.chartReadings) {
         chartReadings.value = data.chartReadings
-      }
-      if (data.news && data.news.length) {
-        newsList.value = data.news
-      }
-      if (data.economicCalendar && data.economicCalendar.length) {
-        calendarList.value = data.economicCalendar
       }
       if (data.stats) {
         dynamicStats.value = data.stats
@@ -1099,180 +1083,7 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <!-- Macro Catalysts & News Risk Radar -->
-      <section class="glass-card rounded-2xl p-6 lg:p-8 border border-white/10 space-y-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
-          <div>
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-[10px] font-mono text-rose-400 uppercase font-bold tracking-wider mb-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping"></span>
-              Live Macro & Crypto Radar
-            </div>
-            <h2 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <svg class="w-5 h-5 text-neon-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-              </svg>
-              Macro Catalysts & News Risk Radar
-            </h2>
-            <p class="text-xs text-slate-400">Real-time fundamental intelligence, breaking market wire headlines, and high-volatility event protocols</p>
-          </div>
 
-          <!-- News Filter Tabs -->
-          <div class="flex items-center gap-1 p-1 rounded-xl bg-dark-900 border border-white/10 text-xs font-medium">
-            <button 
-              v-for="flt in [
-                { id: 'all', label: 'All News' },
-                { id: 'XAUUSD', label: 'Gold (XAUUSD)' },
-                { id: 'BTCUSDT', label: 'Bitcoin (BTCUSDT)' }
-              ]"
-              :key="flt.id"
-              @click="activeNewsFilter = flt.id"
-              :class="activeNewsFilter === flt.id ? 'bg-dark-800 text-white font-bold border border-white/10 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-              class="px-3.5 py-1.5 rounded-lg transition-all">
-              {{ flt.label }}
-            </button>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          <!-- Left Column: Breaking News Feed (7 cols) -->
-          <div class="lg:col-span-7 space-y-3">
-            <div class="flex items-center justify-between text-xs font-mono text-slate-400 pb-1">
-              <span class="flex items-center gap-1.5 uppercase tracking-wider font-bold text-[11px] text-slate-300">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Streaming Financial Wire:
-              </span>
-              <span>{{ filteredNews.length }} Live Stories</span>
-            </div>
-
-            <!-- News Cards List -->
-            <div class="space-y-3 max-h-[460px] overflow-y-auto pr-1 scrollbar-none">
-              <div 
-                v-for="item in filteredNews" 
-                :key="item.id"
-                class="p-4 rounded-xl bg-dark-900/70 border border-white/5 hover:border-white/20 transition-all space-y-2 group">
-                
-                <!-- News Meta Row -->
-                <div class="flex items-center justify-between text-xs font-mono">
-                  <div class="flex items-center gap-2">
-                    <span 
-                      :class="item.asset === 'XAUUSD' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'"
-                      class="px-2 py-0.5 rounded border text-[10px] font-bold">
-                      {{ item.asset }}
-                    </span>
-                    <span class="text-slate-400 text-[11px]">{{ item.source }}</span>
-                    <span class="text-slate-600">•</span>
-                    <span class="text-slate-500 text-[11px]">{{ item.time }}</span>
-                  </div>
-
-                  <div class="flex items-center gap-1.5">
-                    <!-- Sentiment Badge -->
-                    <span 
-                      :class="[
-                        item.sentiment === 'BULLISH' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : '',
-                        item.sentiment === 'BEARISH' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : '',
-                        item.sentiment === 'NEUTRAL' ? 'bg-slate-700/20 text-slate-300 border-slate-600/30' : '',
-                        'px-2 py-0.5 rounded border text-[10px] font-bold tracking-wider'
-                      ]">
-                      {{ item.sentiment }}
-                    </span>
-
-                    <!-- Impact Badge -->
-                    <span 
-                      :class="item.impact === 'HIGH' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 font-bold' : 'bg-blue-500/10 text-blue-300 border-blue-500/20'"
-                      class="px-2 py-0.5 rounded border text-[10px]">
-                      {{ item.impact }}
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Headline Link -->
-                <a 
-                  :href="item.link" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  class="block text-sm font-semibold text-slate-100 group-hover:text-neon-cyan transition-colors leading-snug">
-                  {{ item.title }}
-                </a>
-
-                <!-- Quick Action Bar -->
-                <div class="pt-1 flex items-center justify-between text-[11px] font-mono text-slate-500">
-                  <span class="flex items-center gap-1 text-slate-400 group-hover:text-slate-300">
-                    <span>Read Verified Dispatch</span>
-                    <svg class="w-3 h-3 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </span>
-                  
-                  <button 
-                    @click="selectTicker(tickers.find(t => t.symbol === item.asset) || tickers[0])"
-                    class="hover:text-neon-cyan transition-colors flex items-center gap-1">
-                    <span>Inspect {{ item.asset }} Chart</span>
-                    <span>→</span>
-                  </button>
-                </div>
-
-              </div>
-
-              <!-- Empty State Fallback -->
-              <div v-if="filteredNews.length === 0" class="p-8 text-center text-slate-500 font-mono text-xs">
-                Fetching latest headlines from real-time financial wire...
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Column: High-Impact Economic Calendar & Volatility Protocol (5 cols) -->
-          <div class="lg:col-span-5 space-y-4 font-mono">
-            
-            <!-- Volatility Protocol Alert Card -->
-            <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2">
-              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-                <svg class="w-4 h-4 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span>Macro Volatility Guard Protocol</span>
-              </div>
-              <p class="text-[11px] text-amber-200/90 leading-relaxed">
-                Tighten Dynamic ATR Stop Losses or halt new breakout executions 15 minutes prior to scheduled High-Volatility releases to protect capital from liquidity sweeps.
-              </p>
-            </div>
-
-            <!-- Catalyst Schedule List -->
-            <div class="space-y-3">
-              <div class="text-[11px] uppercase tracking-wider text-slate-400 font-bold flex items-center justify-between">
-                <span>Key Catalyst Watchlist</span>
-                <span class="text-emerald-400 text-[10px]">Real-Time Rules</span>
-              </div>
-
-              <div 
-                v-for="ev in calendarList" 
-                :key="ev.id"
-                class="p-3.5 rounded-xl bg-dark-900/80 border border-white/5 space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="font-bold text-white text-[12px]">{{ ev.event }}</span>
-                  <span 
-                    :class="ev.impact === 'MAX VOLATILITY' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'"
-                    class="px-2 py-0.5 rounded border text-[10px] font-bold">
-                    {{ ev.impact }}
-                  </span>
-                </div>
-
-                <div class="flex items-center justify-between text-[11px] text-slate-400">
-                  <span class="text-slate-500">Target: <strong class="text-slate-300">{{ ev.affected }}</strong></span>
-                  <span class="text-neon-cyan font-bold">{{ ev.status }}</span>
-                </div>
-
-                <p class="text-[11px] text-slate-400 leading-relaxed bg-dark-950/60 p-2 rounded-lg border border-white/5">
-                  {{ ev.biasNote }}
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-      </section>
 
       <!-- Institutional Risk & Position Sizing Calculator -->
       <section id="risk-calculator-section" class="glass-card rounded-2xl p-6 lg:p-8 border border-white/10 space-y-6">
