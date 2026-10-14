@@ -1,8 +1,13 @@
-# ZOQIRA.QUANT // Personal AI Market Intelligence & Signal Terminal
+# MySIGNAL QUANT // Autonomous AI Market Intelligence & Signal Terminal
 
-A personal, high-performance web platform inspired by **[Zoqira.pro](https://zoqira.pro/)**, designed for automated quantitative analysis, AI signal generation, and dynamic risk execution directly on **TradingView on the Web**.
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live%20Production-black?style=for-the-badge&logo=vercel)](https://tradingtool-theta.vercel.app)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-CHANStiLLlearning%2Fmysignal--quant-181717?style=for-the-badge&logo=github)](https://github.com/CHANStiLLlearning/mysignal-quant)
+
+> 🚀 **Live Production Application:** [https://tradingtool-theta.vercel.app](https://tradingtool-theta.vercel.app)  
+> 🔗 **Official Repository:** [https://github.com/CHANStiLLlearning/mysignal-quant](https://github.com/CHANStiLLlearning/mysignal-quant)
 
 ---
+
 
 ## Key Features (Modeled after Zoqira)
 
