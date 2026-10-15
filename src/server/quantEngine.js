@@ -873,106 +873,6 @@ function evaluateSetupGrade({
         currentPrice
       });
 
-      // STEP 3: PREDICTION MARKET (BUY OR SELL) QUANTITATIVE ENGINE
-      const rawUpScore = upwardScore;
-      const rawDownScore = downwardScore;
-      const totalScoreSum = rawUpScore + rawDownScore || 1;
-      const buyProbPct = Math.min(96, Math.max(4, Math.round((rawUpScore / totalScoreSum) * 100)));
-      const sellProbPct = 100 - buyProbPct;
-      const predictionVerdict = buyProbPct >= 50 ? 'BUY' : 'SELL';
-      const predictionAction = buyProbPct >= 50 ? 'BUY / LONG' : 'SELL / SHORT';
-      const predictionConfidence = Math.max(buyProbPct, sellProbPct);
-
-      const exp15m = parseFloat((atr * 0.85).toFixed(2));
-      const exp1h = parseFloat((atr * 1.85).toFixed(2));
-      const exp4h = parseFloat((atr * 3.6).toFixed(2));
-      const exp24h = parseFloat((atr * 6.2).toFixed(2));
-
-      const tgt15m = parseFloat((isBull ? currentPrice + exp15m : currentPrice - exp15m).toFixed(2));
-      const tgt1h = parseFloat((isBull ? currentPrice + exp1h : currentPrice - exp1h).toFixed(2));
-      const tgt4h = parseFloat((isBull ? currentPrice + exp4h : currentPrice - exp4h).toFixed(2));
-      const tgt24h = parseFloat((isBull ? currentPrice + exp24h : currentPrice - exp24h).toFixed(2));
-
-      const marketPrediction = {
-        symbol,
-        name,
-        currentPrice,
-        verdict: predictionVerdict, // 'BUY' | 'SELL'
-        verdictLabel: predictionVerdict === 'BUY' ? '▲ PREDICTED BUY' : '▼ PREDICTED SELL',
-        verdictSubtext: predictionVerdict === 'BUY' ? 'High Probability Bullish Outperform' : 'High Probability Bearish Breakdown',
-        actionText: predictionAction,
-        isBull,
-        buyProbability: buyProbPct,
-        sellProbability: sellProbPct,
-        confidence: predictionConfidence,
-        expectedMovePts: isBull ? `+${tp2Gain} pts` : `-${tp2Gain} pts`,
-        targetPrice: tp2,
-        invalidationLevel: sl,
-        riskReward: '1 : 3.0',
-        summary: isBull
-          ? `Quantitative consensus predicts a ${buyProbPct}% probability of BUY continuation toward ${tp2}. Key invalidation pivot sits at ${sl}.`
-          : `Quantitative consensus predicts a ${sellProbPct}% probability of SELL continuation toward ${tp2}. Key invalidation pivot sits at ${sl}.`,
-        models: [
-          {
-            name: 'Trend Vector (Dual EMA 21/55)',
-            prediction: ema21 >= ema55 ? 'BUY' : 'SELL',
-            weight: '25%',
-            score: ema21 >= ema55 ? 9.4 : 2.6,
-            bias: ema21 >= ema55 ? 'BULLISH' : 'BEARISH',
-            detail: `EMA 21 (${ema21.toFixed(1)}) ${ema21 >= ema55 ? '>' : '<'} EMA 55 (${ema55.toFixed(1)}) trend ribbon`
-          },
-          {
-            name: 'Directional Momentum (ADX & DMI)',
-            prediction: plusDi >= minusDi ? 'BUY' : 'SELL',
-            weight: '20%',
-            score: plusDi >= minusDi ? 8.9 : 3.1,
-            bias: plusDi >= minusDi ? '+DI LEADING' : '-DI LEADING',
-            detail: `+DI: ${plusDi} | -DI: ${minusDi} | ADX Power: ${adx}`
-          },
-          {
-            name: 'Microstructure Delta & VWAP',
-            prediction: micro.deltaRatio >= 0 ? 'BUY' : 'SELL',
-            weight: '25%',
-            score: micro.deltaRatio >= 0 ? 9.1 : 2.8,
-            bias: micro.deltaRatio >= 0 ? 'BUYER DOMINANCE' : 'SELLER DOMINANCE',
-            detail: `Orderflow delta at ${micro.deltaRatio > 0 ? '+' : ''}${micro.deltaRatio}% (VWAP: ${micro.vwap})`
-          },
-          {
-            name: 'Fractal Memory (Hurst R/S)',
-            prediction: hurst > 0.50 ? (isBull ? 'BUY' : 'SELL') : 'MEAN_REVERT',
-            weight: '15%',
-            score: 8.7,
-            bias: hurst > 0.55 ? 'PERSISTENT TREND' : 'MEAN REVERSION',
-            detail: `Hurst exponent ${hurst} validates directional persistence`
-          },
-          {
-            name: 'Structural Geometry & Imbalance',
-            prediction: isBull ? 'BUY' : 'SELL',
-            weight: '15%',
-            score: 9.3,
-            bias: isBull ? 'BULLISH EXPANSION' : 'BEARISH DISTRIBUTION',
-            detail: chartReading?.structure?.label || 'Price Action Swings'
-          }
-        ],
-        horizons: [
-          { timeframe: '15M', label: 'Next 15M Bar', prediction: predictionVerdict, target: tgt15m, prob: Math.min(94, predictionConfidence + 2), expectedPts: (isBull ? '+' : '-') + exp15m, range: `${(currentPrice - exp15m * 0.4).toFixed(2)} - ${(currentPrice + exp15m * 1.2).toFixed(2)}` },
-          { timeframe: '1H', label: 'Next 1 Hour', prediction: predictionVerdict, target: tgt1h, prob: predictionConfidence, expectedPts: (isBull ? '+' : '-') + exp1h, range: `${(currentPrice - exp1h * 0.3).toFixed(2)} - ${(currentPrice + exp1h * 1.1).toFixed(2)}` },
-          { timeframe: '4H', label: 'Next 4 Hours', prediction: predictionVerdict, target: tgt4h, prob: Math.max(58, predictionConfidence - 6), expectedPts: (isBull ? '+' : '-') + exp4h, range: `${(currentPrice - exp4h * 0.3).toFixed(2)} - ${(currentPrice + exp4h * 1.1).toFixed(2)}` },
-          { timeframe: '24H', label: 'Next 24 Hours', prediction: predictionVerdict, target: tgt24h, prob: Math.max(52, predictionConfidence - 12), expectedPts: (isBull ? '+' : '-') + exp24h, range: `${(currentPrice - exp24h * 0.4).toFixed(2)} - ${(currentPrice + exp24h * 1.2).toFixed(2)}` }
-        ],
-        contract: {
-          question: `Will ${symbol} close HIGHER (BUY) or LOWER (SELL) in the upcoming session?`,
-          buyOdds: parseFloat((buyProbPct / 100).toFixed(2)),
-          sellOdds: parseFloat((sellProbPct / 100).toFixed(2)),
-          buyPriceDisplay: `${buyProbPct}¢`,
-          sellPriceDisplay: `${sellProbPct}¢`,
-          volume24h: symbol === 'XAUUSD' ? '$5.42M' : '$24.80M',
-          totalPredictions: symbol === 'XAUUSD' ? 1840 : 4210,
-          crowdBuyPct: buyProbPct,
-          crowdSellPct: sellProbPct
-        }
-      };
-
       return {
         id: `sig-${symbol.toLowerCase()}-live`,
         symbol,
@@ -987,7 +887,6 @@ function evaluateSetupGrade({
         isBull,
         confidence: baseConfidence,
         marketObservation,
-        marketPrediction,
         setup,
         entry,
         sl,
@@ -1070,10 +969,6 @@ function evaluateSetupGrade({
       chartReadings: {
         XAUUSD: signals[0].chartReading,
         BTCUSDT: signals[1].chartReading
-      },
-      marketPredictions: {
-        XAUUSD: signals[0].marketPrediction,
-        BTCUSDT: signals[1].marketPrediction
       },
       stats
     };
