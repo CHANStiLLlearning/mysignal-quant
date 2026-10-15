@@ -97,7 +97,7 @@ if longTrigger
                     bgcolor=color.new(color.green, 90), border_color=color.green, border_style=line.style_dashed)
             box.new(left=bar_index, top=entryP, right=bar_index + 15, bottom=slP, 
                     bgcolor=color.new(color.red, 90), border_color=color.red, border_style=line.style_dashed)
-            label.new(bar_index, entryP, "LONG ENTRY\n" + str.tostring(entryP, "#.##") + "\nSL: " + str.tostring(slP, "#.##") + "\nTP1: " + str.tostring(tp1P, "#.##") + "\nTP2: " + str.tostring(tp2P, "#.##"), 
+            label.new(bar_index, entryP, "🟢 BUY INDICATOR [BUY / LONG]\nEntry: " + str.tostring(entryP, "#.##") + "\nSL: " + str.tostring(slP, "#.##") + " (-" + str.tostring(riskR, "#.##") + " pts)\nTP1: " + str.tostring(tp1P, "#.##") + " (+" + str.tostring(rrRatio1 * riskR, "#.##") + " pts)\nTP2: " + str.tostring(tp2P, "#.##") + " (+" + str.tostring(rrRatio2 * riskR, "#.##") + " pts)", 
                       color=color.green, textcolor=color.white, style=label.style_label_up, size=size.small)
 
 if shortTrigger
@@ -116,7 +116,7 @@ if shortTrigger
                     bgcolor=color.new(color.green, 90), border_color=color.green, border_style=line.style_dashed)
             box.new(left=bar_index, top=slP, right=bar_index + 15, bottom=entryP, 
                     bgcolor=color.new(color.red, 90), border_color=color.red, border_style=line.style_dashed)
-            label.new(bar_index, entryP, "SHORT ENTRY\n" + str.tostring(entryP, "#.##") + "\nSL: " + str.tostring(slP, "#.##") + "\nTP1: " + str.tostring(tp1P, "#.##") + "\nTP2: " + str.tostring(tp2P, "#.##"), 
+            label.new(bar_index, entryP, "🔴 SELL INDICATOR [SELL / SHORT]\nEntry: " + str.tostring(entryP, "#.##") + "\nSL: " + str.tostring(slP, "#.##") + " (-" + str.tostring(riskR, "#.##") + " pts)\nTP1: " + str.tostring(tp1P, "#.##") + " (+" + str.tostring(rrRatio1 * riskR, "#.##") + " pts)\nTP2: " + str.tostring(tp2P, "#.##") + " (+" + str.tostring(rrRatio2 * riskR, "#.##") + " pts)", 
                       color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
 
 // Invalidate if price hits SL or TP2
@@ -192,9 +192,10 @@ plotshape(longTrigger, title="Long Signal Icon", style=shape.triangleup, locatio
 plotshape(shortTrigger, title="Short Signal Icon", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal)
 
 // =============================================================================
-// 7. ON-SCREEN HUD DASHBOARD TABLE (10 ROWS)
 // =============================================================================
-var table hud = table.new(position.top_right, 2, 10, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
+// 7. ON-SCREEN HUD DASHBOARD TABLE (11 ROWS)
+// =============================================================================
+var table hud = table.new(position.top_right, 2, 11, bgcolor=color.new(#0d1117, 15), border_color=color.new(#30363d, 0), border_width=1)
 
 if barstate.islast and showTable
     // Header
@@ -205,47 +206,52 @@ if barstate.islast and showTable
     table.cell(hud, 0, 1, "Setup Quality", text_color=color.silver, text_size=size.small)
     table.cell(hud, 1, 1, "TIER " + setupGrade + " (" + str.tostring(confScore) + "/5)", bgcolor=color.new(setupColor, 75), text_color=color.white, text_size=size.small)
 
-    // Market Regime
-    regimeStr = isBullish ? "🟢 BULLISH" : (isBearish ? "🔴 BEARISH" : "🟡 CHOP / RANGE")
-    regimeBg  = isBullish ? color.new(color.green, 70) : (isBearish ? color.new(color.red, 70) : color.new(color.yellow, 70))
-    table.cell(hud, 0, 2, "Regime Status", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 2, regimeStr, bgcolor=regimeBg, text_color=color.white, text_size=size.small)
+    // Step 1: Market Observation (Upward vs Downward)
+    obsTrendStr = isBullish ? "🟢 UPWARD TREND" : (isBearish ? "🔴 DOWNWARD TREND" : "🟡 OBSERVING CHOP")
+    obsTrendBg  = isBullish ? color.new(color.green, 70) : (isBearish ? color.new(color.red, 70) : color.new(color.yellow, 70))
+    table.cell(hud, 0, 2, "1. Observed Trend", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 2, obsTrendStr, bgcolor=obsTrendBg, text_color=color.white, text_size=size.small)
+
+    // Step 2: Signal Indicator (BUY / SELL)
+    sigIndStr = activeDir == 1 ? "🟢 BUY INDICATOR" : (activeDir == -1 ? "🔴 SELL INDICATOR" : "⚪ OBSERVING")
+    sigIndCol = activeDir == 1 ? color.green : (activeDir == -1 ? color.red : color.gray)
+    table.cell(hud, 0, 3, "2. Indicator Status", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 3, sigIndStr, text_color=sigIndCol, text_size=size.small)
 
     // ADX Trend Strength
     adxStr = str.tostring(adxVal, "#.#") + (adxVal >= adxThresh ? " (Trending)" : " (Chop)")
     adxCol = adxVal >= adxThresh ? color.lime : color.orange
-    table.cell(hud, 0, 3, "ADX (14)", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 3, adxStr, text_color=adxCol, text_size=size.small)
+    table.cell(hud, 0, 4, "ADX (14)", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 4, adxStr, text_color=adxCol, text_size=size.small)
 
     // Kaufman Efficiency Ratio
     erStr = str.tostring(kaufmanER, "#.##") + (kaufmanER >= erThresh ? " (Smooth)" : " (Noisy)")
     erCol = kaufmanER >= erThresh ? color.lime : color.orange
-    table.cell(hud, 0, 4, "Efficiency Ratio", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 4, erStr, text_color=erCol, text_size=size.small)
+    table.cell(hud, 0, 5, "Efficiency Ratio", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 5, erStr, text_color=erCol, text_size=size.small)
 
     // Current ATR
-    table.cell(hud, 0, 5, "Current ATR (14)", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 5, str.tostring(atrVal, "#.####"), text_color=color.white, text_size=size.small)
-
-    // Active Setup State
-    activeStr = activeDir == 1 ? "LONG ACTIVE" : (activeDir == -1 ? "SHORT ACTIVE" : "STAND ASIDE")
-    table.cell(hud, 0, 6, "Trade Setup", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 6, activeStr, text_color=activeDir == 1 ? color.green : (activeDir == -1 ? color.red : color.gray), text_size=size.small)
+    table.cell(hud, 0, 6, "Current ATR (14)", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 6, str.tostring(atrVal, "#.####"), text_color=color.white, text_size=size.small)
 
     // Stop Loss Level
-    slStr = activeDir != 0 ? str.tostring(slP, "#.##") + " (" + str.tostring(riskR, "#.##") + " pts)" : "--"
+    slStr = activeDir != 0 ? str.tostring(slP, "#.##") + " (-" + str.tostring(riskR, "#.##") + " pts)" : "--"
     table.cell(hud, 0, 7, "Dynamic SL", text_color=color.silver, text_size=size.small)
     table.cell(hud, 1, 7, slStr, text_color=color.red, text_size=size.small)
 
     // Take Profit Levels
-    tpStr = activeDir != 0 ? "TP1: " + str.tostring(tp1P, "#.##") + "\nTP2: " + str.tostring(tp2P, "#.##") : "--"
-    table.cell(hud, 0, 8, "Targets (1.5R / 3R)", text_color=color.silver, text_size=size.small)
+    tpStr = activeDir != 0 ? "TP1: " + str.tostring(tp1P, "#.##") + " | TP2: " + str.tostring(tp2P, "#.##") : "--"
+    table.cell(hud, 0, 8, "Targets (1.5R/3R)", text_color=color.silver, text_size=size.small)
     table.cell(hud, 1, 8, tpStr, text_color=color.green, text_size=size.small)
+
+    // R:R Profile
+    table.cell(hud, 0, 9, "Risk-to-Reward", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 9, "1 : 1.5 (TP1) | 1 : 3.0 (TP2)", text_color=color.aqua, text_size=size.small)
 
     // Live Chart Reading
     paStr = isHammer ? "🔨 PINBAR (Hammer)" : (isShootingStar ? "⭐ PINBAR (Star)" : (isBullEngulf ? "🟢 BULL ENGULF" : (isBearEngulf ? "🔴 BEAR ENGULF" : (isBullBOS ? "📈 BULL BOS" : (isBearBOS ? "📉 BEAR BOS" : "📊 STEADY CONFLUENCE")))))
-    table.cell(hud, 0, 9, "Chart Reading", text_color=color.silver, text_size=size.small)
-    table.cell(hud, 1, 9, paStr, text_color=color.aqua, text_size=size.small)
+    table.cell(hud, 0, 10, "Chart Reading", text_color=color.silver, text_size=size.small)
+    table.cell(hud, 1, 10, paStr, text_color=color.aqua, text_size=size.small)
 
 // =============================================================================
 // 8. AUTOMATION BOT ALERTS (SETUP A+, A, B, C)

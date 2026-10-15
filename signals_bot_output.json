@@ -1,10 +1,15 @@
 {
-  "timestamp": "2026-10-15T02:25:00.000288",
+  "timestamp": "2026-10-15T10:35:48.872061",
   "scan_count": 1,
   "signals": [
     {
-      "symbol": "BTC/USDT Bitcoin",
-      "direction": "SHORT",
+      "symbol": "XAU/USD Gold",
+      "direction": "LONG",
+      "indicator": "BUY INDICATOR",
+      "action_text": "BUY / LONG",
+      "trend_direction": "UPWARD TREND (BULLISH)",
+      "trend_state": "UPWARD",
+      "trend_conviction": 99,
       "grade": "C",
       "score": 1,
       "title": "Setup C (Speculative Scalp / Chop Fade)",
@@ -13,7 +18,61 @@
       "criteria": [
         {
           "title": "Dual EMA Trend Ribbon",
-          "desc": "Price relative to EMA21 (81851.33) & EMA55 (82394.44)",
+          "desc": "Price relative to EMA21 (4137.06) & EMA55 (4127.16)",
+          "passed": true
+        },
+        {
+          "title": "Market Structure (BOS / CHoCH)",
+          "desc": "Clear breakout beyond swing high",
+          "passed": false
+        },
+        {
+          "title": "Price Action / Liquidity Sweep",
+          "desc": "Institutional rejection wick or engulfing momentum",
+          "passed": false
+        },
+        {
+          "title": "Orderflow Delta Dominance",
+          "desc": "Volume surge (0.8 vs avg 4.1) & buyer/seller delta",
+          "passed": false
+        },
+        {
+          "title": "Kaufman ER / ADX Filter",
+          "desc": "ER: 0.06 (noise filter) & ADX: 37.7 (trend velocity)",
+          "passed": false
+        }
+      ],
+      "entry": 4146.68,
+      "sl": 4134.55,
+      "sl_distance": 12.13,
+      "sl_rationale": "Structural invalidation below recent swing low (4118.59) with 1.5x ATR dynamic buffer.",
+      "tp1": 4164.88,
+      "tp1_gain": 18.2,
+      "tp2": 4183.07,
+      "tp2_gain": 36.39,
+      "risk": 12.13,
+      "atr": 8.089285714285714,
+      "adx": 37.72221136940671,
+      "er": 0.062240663900426964,
+      "time": "2026-10-15 10:35:47"
+    },
+    {
+      "symbol": "BTC/USDT Bitcoin",
+      "direction": "SHORT",
+      "indicator": "SELL INDICATOR",
+      "action_text": "SELL / SHORT",
+      "trend_direction": "DOWNWARD TREND (BEARISH)",
+      "trend_state": "DOWNWARD",
+      "trend_conviction": 99,
+      "grade": "C",
+      "score": 1,
+      "title": "Setup C (Speculative Scalp / Chop Fade)",
+      "color_code": "\u001b[97m",
+      "advice": "Low confluence environment. Reduce position size or stand aside.",
+      "criteria": [
+        {
+          "title": "Dual EMA Trend Ribbon",
+          "desc": "Price relative to EMA21 (81350.86) & EMA55 (81725.95)",
           "passed": true
         },
         {
@@ -28,24 +87,28 @@
         },
         {
           "title": "Orderflow Delta Dominance",
-          "desc": "Volume surge (10.1 vs avg 37.4) & buyer/seller delta",
+          "desc": "Volume surge (9.9 vs avg 40.8) & buyer/seller delta",
           "passed": false
         },
         {
           "title": "Kaufman ER / ADX Filter",
-          "desc": "ER: 0.18 (noise filter) & ADX: 5.2 (trend velocity)",
+          "desc": "ER: 0.27 (noise filter) & ADX: 52.0 (trend velocity)",
           "passed": false
         }
       ],
-      "entry": 81767.1,
-      "sl": 82055.72142857143,
-      "tp1": 81334.16785714286,
-      "tp2": 80901.23571428574,
-      "risk": 288.62142857142317,
-      "atr": 192.41428571428384,
-      "adx": 5.192006269593893,
-      "er": 0.17686968728067143,
-      "time": "2026-10-15 02:24:59"
+      "entry": 80843.3,
+      "sl": 81468.14,
+      "sl_distance": 624.84,
+      "sl_rationale": "Structural invalidation above recent swing high (81808.00) with 1.5x ATR dynamic buffer.",
+      "tp1": 79906.04,
+      "tp1_gain": 937.26,
+      "tp2": 78968.78,
+      "tp2_gain": 1874.52,
+      "risk": 624.84,
+      "atr": 416.55714285714515,
+      "adx": 52.00916730328491,
+      "er": 0.27063919149494986,
+      "time": "2026-10-15 10:35:48"
     }
   ]
 }

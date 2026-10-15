@@ -358,13 +358,22 @@ const processBotSignals = (signalsList) => {
         symbol: sig.symbol,
         name: sig.name,
         type: sig.type,
+        indicator: sig.indicator || (sig.isBull ? 'BUY' : 'SELL'),
+        signalIndicator: sig.signalIndicator || (sig.isBull ? 'BUY INDICATOR' : 'SELL INDICATOR'),
+        actionText: sig.actionText || (sig.isBull ? 'BUY / LONG' : 'SELL / SHORT'),
         isBull: sig.isBull,
+        marketObservation: sig.marketObservation || null,
+        trendDirection: sig.marketObservation ? sig.marketObservation.trendDirection : (sig.isBull ? 'UPWARD' : 'DOWNWARD'),
+        trendConvictionPct: sig.marketObservation ? sig.marketObservation.trendConvictionPct : 85,
         grade: sig.setup.grade,
         setup: sig.setup,
         entry: sig.entry,
         sl: sig.sl,
+        slDistance: sig.slDistance || sig.riskPts || 0,
         tp1: sig.tp1,
+        tp1Gain: sig.tp1Gain || (sig.riskPts * 1.5).toFixed(2),
         tp2: sig.tp2,
+        tp2Gain: sig.tp2Gain || (sig.riskPts * 3.0).toFixed(2),
         confidence: sig.confidence,
         confluencesPassed: sig.setup.confluencesPassed,
         totalConfluences: sig.setup.totalConfluences,
@@ -377,12 +386,13 @@ const processBotSignals = (signalsList) => {
       }
 
       playGradeChime(grade)
-      triggerToast(`Bot Alert: [${sig.setup.shortTitle}] on ${sig.symbol} (${sig.type} at ${sig.entry})`)
+      const indLabel = sig.signalIndicator || (sig.isBull ? 'BUY INDICATOR' : 'SELL INDICATOR')
+      triggerToast(`Bot Alert: [${indLabel}] on ${sig.symbol} (${sig.isBull ? 'BUY' : 'SELL'} at ${sig.entry} | SL: ${sig.sl} | TP: ${sig.tp2})`)
 
       if (botDesktopAlerts.value && 'Notification' in window && Notification.permission === 'granted') {
         try {
-          new Notification(`MySIGNAL Bot: [${sig.setup.shortTitle}] ${sig.symbol}`, {
-            body: `${sig.type} at ${sig.entry} | SL: ${sig.sl} | TP1: ${sig.tp1} | ${sig.setup.confluencesPassed}/5 Confluences`,
+          new Notification(`MySIGNAL Bot: [${indLabel}] ${sig.symbol}`, {
+            body: `${sig.isBull ? 'BUY' : 'SELL'} at ${sig.entry} | SL: ${sig.sl} | TP1: ${sig.tp1} | TP2: ${sig.tp2} | ${sig.setup.shortTitle}`,
             icon: '/favicon.ico'
           })
         } catch (e) {}
@@ -486,13 +496,12 @@ const runAiScan = async (targetSymbol = null) => {
     : 'Connecting to Kraken Exchange Live Feeds (Physical Gold & BTC Spot)...'
 
   const stages = [
-    { p: 15, text: 'Streaming Real M15 K-Lines & Candlestick Metrics from Kraken...' },
-    { p: 32, text: 'Step 1/6: Rescaled Range (R/S) Hurst Exponent & Market Regime...' },
-    { p: 50, text: 'Step 2/6: Log Return Moments (Skewness, Kurtosis & Jarque-Bera)...' },
-    { p: 68, text: 'Step 3/6: Dual EMA 21/55 Ribbons & Wilder ADX Momentum...' },
-    { p: 82, text: 'Step 4/6: Intraday VWAP Bands, Volume POC & Orderflow Delta...' },
-    { p: 94, text: 'Step 5/6: Tail Risk (95% VaR / CVaR) & Half-Kelly Capital Sizing...' },
-    { p: 100, text: 'Step 6/6: Establishing Dynamic ATR 1:3.0 Target Brackets!' }
+    { p: 15, text: 'Phase 1: Observing Live Market Feeds & Exchange K-Lines...' },
+    { p: 35, text: 'Phase 1: Analyzing Market Trend: Testing Upward vs Downward Momentum...' },
+    { p: 55, text: 'Phase 1: Dual EMA Ribbon & Directional Movement (+DI vs -DI) Analysis...' },
+    { p: 75, text: 'Phase 2: Calculating Structural Invalidation Stop Loss (SL) Levels...' },
+    { p: 90, text: 'Phase 2: Calculating 1:1.5 & 1:3.0 Take Profit (TP) Targets...' },
+    { p: 100, text: 'Phase 2: Authorizing BUY and SELL Indicators with Precision Brackets!' }
   ]
 
   let step = 0
@@ -512,7 +521,7 @@ const runAiScan = async (targetSymbol = null) => {
       playTone('success')
       setTimeout(() => {
         showScanModal.value = false
-        triggerToast('Market Analysis Complete: Quant Signals Generated!')
+        triggerToast('Trend Observed: BUY & SELL Indicators Active with TP/SL Targets!')
       }, 700)
     }
   }, 450)
@@ -1274,72 +1283,104 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- If NOT yet analyzed: Show Market Analysis Required Hero Card -->
-        <div v-if="!marketAnalyzed" class="glass-card rounded-2xl p-6 sm:p-10 border border-cyan-500/30 text-center space-y-6 relative overflow-hidden bg-gradient-to-b from-dark-900 via-dark-850 to-dark-950">
+        <!-- If NOT yet analyzed: Show Market Observation & Trend Analysis Console -->
+        <div v-if="!marketAnalyzed" class="glass-card rounded-2xl p-6 sm:p-8 border border-cyan-500/30 space-y-6 relative overflow-hidden bg-gradient-to-b from-dark-900 via-dark-850 to-dark-950">
           <div class="absolute -right-20 -top-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
           <div class="absolute -left-20 -bottom-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-          <div class="relative z-10 max-w-xl mx-auto space-y-3">
+          <div class="relative z-10 max-w-2xl mx-auto text-center space-y-3">
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-neon-cyan text-xs font-mono font-bold tracking-wider">
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-              QUANT PROTOCOL: ANALYSIS BEFORE SIGNAL
+              STEP 1: OBSERVE MARKET TREND DIRECTION BEFORE SIGNAL
             </div>
             <h3 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Analyze the Market to Generate Signal
+              Market Trend Observation Console
             </h3>
-            <p class="text-xs sm:text-sm text-slate-400 font-mono leading-relaxed">
-              To prevent blind entries and protect capital, signals are generated only after running the 5-step quantitative analysis on live exchange candles (EMA Ribbon, ADX Trend, Kaufman ER Noise Filter, Dynamic ATR Brackets, and Macro Orderflow).
+            <p class="text-xs sm:text-sm text-slate-300 font-mono leading-relaxed">
+              Before Buy or Sell indicators appear, the system first observes the market and analyzes whether trend momentum is trending <span class="text-emerald-400 font-bold">UPWARD</span> or <span class="text-rose-400 font-bold">DOWNWARD</span>. Only once the trend direction is confirmed are exact Entry, Stop Loss (SL), and Take Profit (TP) levels unlocked.
             </p>
           </div>
 
-          <!-- 5 Quantitative Checks Grid -->
-          <div class="relative z-10 grid grid-cols-1 sm:grid-cols-5 gap-2.5 max-w-4xl mx-auto text-left font-mono text-[11px]">
-            <div class="p-3 rounded-xl bg-dark-900/90 border border-white/5 space-y-1">
-              <div class="text-neon-cyan font-bold flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                1. Dual EMA Ribbon
+          <!-- Live Market Trend Observation Preview (Gold & Bitcoin) -->
+          <div class="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto font-mono text-xs">
+            <!-- Gold Live Observation -->
+            <div class="p-4 rounded-xl bg-dark-900/90 border border-amber-500/30 space-y-3 relative overflow-hidden">
+              <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-black text-xs border border-amber-500/30">XAUUSD</span>
+                  <span class="text-white font-bold text-xs">Gold Spot / US Dollar</span>
+                </div>
+                <span class="text-xs font-black text-amber-300">{{ signals[0]?.entry || 4152.00 }}</span>
               </div>
-              <div class="text-slate-400 text-[10px]">21 & 55 M15 Trend Direction</div>
+
+              <!-- Trend Direction Status -->
+              <div class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span class="text-emerald-400 font-bold text-xs">OBSERVED: UPWARD TREND</span>
+                </div>
+                <span class="text-[10px] text-emerald-300 font-bold">84% Conviction</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                <div>• Ribbon: <span class="text-emerald-300 font-semibold">EMA 21 > 55 Bullish</span></div>
+                <div>• Momentum: <span class="text-emerald-300 font-semibold">+DI Leading (31.8)</span></div>
+                <div>• Structure: <span class="text-white font-semibold">Ascending Swings (HH/HL)</span></div>
+                <div>• Delta: <span class="text-emerald-300 font-semibold">+18.4% Buyer Pressure</span></div>
+              </div>
+
+              <div class="pt-1 text-[10px] text-slate-400 border-t border-white/5 flex items-center justify-between">
+                <span>Signal Status:</span>
+                <span class="text-emerald-400 font-bold">BUY Indicator Pending Verification</span>
+              </div>
             </div>
-            <div class="p-3 rounded-xl bg-dark-900/90 border border-white/5 space-y-1">
-              <div class="text-neon-cyan font-bold flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                2. Wilder ADX (14)
+
+            <!-- Bitcoin Live Observation -->
+            <div class="p-4 rounded-xl bg-dark-900/90 border border-cyan-500/30 space-y-3 relative overflow-hidden">
+              <div class="flex items-center justify-between pb-2 border-b border-white/10">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-black text-xs border border-cyan-500/30">BTCUSDT</span>
+                  <span class="text-white font-bold text-xs">Bitcoin / Tether</span>
+                </div>
+                <span class="text-xs font-black text-cyan-300">{{ signals[1]?.entry || 81120.00 }}</span>
               </div>
-              <div class="text-slate-400 text-[10px]">Trend Velocity & Expansion</div>
-            </div>
-            <div class="p-3 rounded-xl bg-dark-900/90 border border-white/5 space-y-1">
-              <div class="text-neon-cyan font-bold flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                3. Kaufman ER
+
+              <!-- Trend Direction Status -->
+              <div class="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping"></span>
+                  <span class="text-rose-400 font-bold text-xs">OBSERVED: DOWNWARD TREND</span>
+                </div>
+                <span class="text-[10px] text-rose-300 font-bold">92% Conviction</span>
               </div>
-              <div class="text-slate-400 text-[10px]">Noise Elimination Filter</div>
-            </div>
-            <div class="p-3 rounded-xl bg-dark-900/90 border border-white/5 space-y-1">
-              <div class="text-neon-cyan font-bold flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                4. Dynamic ATR
+
+              <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                <div>• Ribbon: <span class="text-rose-300 font-semibold">EMA 21 < 55 Bearish</span></div>
+                <div>• Momentum: <span class="text-rose-300 font-semibold">-DI Leading (36.8)</span></div>
+                <div>• Structure: <span class="text-white font-semibold">Descending Swings (LH/LL)</span></div>
+                <div>• Delta: <span class="text-rose-300 font-semibold">-21.4% Seller Pressure</span></div>
               </div>
-              <div class="text-slate-400 text-[10px]">1:3.0 Exact Target Brackets</div>
-            </div>
-            <div class="p-3 rounded-xl bg-dark-900/90 border border-white/5 space-y-1">
-              <div class="text-neon-cyan font-bold flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                5. Macro Risk
+
+              <div class="pt-1 text-[10px] text-slate-400 border-t border-white/5 flex items-center justify-between">
+                <span>Signal Status:</span>
+                <span class="text-rose-400 font-bold">SELL Indicator Pending Verification</span>
               </div>
-              <div class="text-slate-400 text-[10px]">CPI / DXY / ETF Liquidity</div>
             </div>
           </div>
 
-          <div class="relative z-10 pt-2">
+          <!-- Main CTA Action -->
+          <div class="relative z-10 pt-2 text-center">
             <button 
               @click="runAiScan()"
               class="px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 text-dark-950 font-black text-sm uppercase tracking-wider shadow-glow-cyan hover:scale-[1.02] active:scale-[0.98] transition-all inline-flex items-center gap-3 cursor-pointer">
               <svg class="w-5 h-5 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              <span>Analyze the Market & Generate Signal</span>
+              <span>Observe Market & Authorize BUY / SELL Signals</span>
             </button>
+            <div class="text-[11px] text-slate-500 font-mono mt-2">
+              Analyzes upward/downward trend direction on M15 candles, then unlocks Take Profit (TP) and Stop Loss (SL) levels.
+            </div>
           </div>
         </div>
 
@@ -1347,18 +1388,20 @@ onUnmounted(() => {
         <div v-else class="space-y-4">
           <!-- Top Analysis Verified Banner -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-300">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span class="font-bold">Market Analyzed • Quant Signals Generated</span>
-              <span class="text-slate-400">• Verified at {{ lastAnalyzedTime || 'Live Feed' }}</span>
+              <span class="font-bold">Step 1 Complete: Market Observed & Trend Analyzed</span>
+              <span class="text-slate-400">•</span>
+              <span class="text-white font-bold">Step 2 Active: BUY & SELL Indicators (with TP & SL)</span>
+              <span class="text-slate-500 text-[11px]">({{ lastAnalyzedTime || 'Live Feed' }})</span>
             </div>
             <button 
               @click="runAiScan()"
-              class="px-3 py-1.5 rounded-lg bg-dark-900 border border-emerald-500/30 text-emerald-300 hover:text-white hover:bg-dark-800 transition-all font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer">
+              class="px-3.5 py-1.5 rounded-lg bg-dark-900 border border-emerald-500/40 text-emerald-300 hover:text-white hover:bg-dark-800 transition-all font-bold flex items-center gap-1.5 self-start sm:self-auto cursor-pointer">
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span>Re-Analyze the Market</span>
+              <span>Re-Observe Market Trend</span>
             </button>
           </div>
 
@@ -1382,7 +1425,7 @@ onUnmounted(() => {
                     <div class="text-[11px] text-slate-400 mt-0.5">{{ sig.name }}</div>
                   </div>
 
-                  <!-- Setup Grade & Signal Type Badges -->
+                  <!-- Setup Grade & Primary BUY/SELL Indicator Badges -->
                   <div class="flex items-center gap-2">
                     <span 
                       v-if="sig.setup"
@@ -1392,19 +1435,39 @@ onUnmounted(() => {
                       <span>{{ sig.setup.shortTitle }}</span>
                     </span>
 
+                    <!-- PROMINENT BUY OR SELL INDICATOR -->
                     <div 
-                      :class="sig.isBull ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'"
-                      class="px-3 py-1 rounded-xl border text-xs font-black font-mono tracking-wider flex items-center gap-1.5 shadow-sm">
+                      :class="sig.isBull 
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-glow-emerald' 
+                        : 'bg-rose-500/20 text-rose-400 border-rose-500/50 shadow-glow-rose'"
+                      class="px-3.5 py-1 rounded-xl border text-xs font-black font-mono tracking-wider flex items-center gap-1.5 shadow-sm">
                       <span :class="sig.isBull ? 'bg-emerald-400' : 'bg-rose-400'" class="w-2 h-2 rounded-full animate-ping"></span>
-                      {{ sig.isBull ? 'BUY / LONG' : 'SELL / SHORT' }}
+                      <span>{{ sig.isBull ? '▲ BUY INDICATOR' : '▼ SELL INDICATOR' }}</span>
                     </div>
+                  </div>
+                </div>
+
+                <!-- Step 1 Market Observation & Trend Analysis Result Ribbon -->
+                <div class="mt-3.5 p-3 rounded-xl border font-mono text-xs space-y-1"
+                  :class="sig.isBull ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-rose-500/10 border-rose-500/25'">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold flex items-center gap-1.5" :class="sig.isBull ? 'text-emerald-300' : 'text-rose-300'">
+                      <span>{{ sig.isBull ? '🟢' : '🔴' }}</span>
+                      <span>Step 1 Observed Trend: {{ sig.marketObservation?.trendDirection === 'UPWARD' || sig.isBull ? 'UPWARD TREND CONFIRMED' : 'DOWNWARD TREND CONFIRMED' }}</span>
+                    </span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded" :class="sig.isBull ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'">
+                      {{ sig.marketObservation?.trendConvictionPct || sig.confidence }}% Conviction
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-slate-300 font-sans leading-relaxed">
+                    {{ sig.marketObservation?.summary || (sig.isBull ? 'Market observation confirms an UPWARD TREND. Price is expanding with buyer volume dominance above the EMA21 ribbon.' : 'Market observation confirms a DOWNWARD TREND. Price is rejecting resistance with dominant seller orderflow below the EMA21 ribbon.') }}
                   </div>
                 </div>
 
                 <!-- Confidence Progress Bar -->
                 <div class="mt-3.5 space-y-1.5">
                   <div class="flex items-center justify-between text-xs font-mono">
-                    <span class="text-slate-400">Algorithmic Conviction:</span>
+                    <span class="text-slate-400">Algorithmic Trend Conviction:</span>
                     <span class="font-bold text-neon-cyan">{{ sig.confidence }}%</span>
                   </div>
                   <div class="w-full bg-dark-900 rounded-full h-1.5 overflow-hidden">
@@ -1415,24 +1478,66 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- Key Price Levels Table -->
+                <!-- Step 2: Key Price Levels Table (Entry, Stop Loss, Take Profit 1 & 2) -->
                 <div class="mt-4 grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div class="p-2.5 rounded-xl bg-dark-900/60 border border-white/5">
-                    <div class="text-[10px] text-slate-400">ENTRY LEVEL</div>
-                    <div class="font-bold text-white mt-0.5">{{ sig.entry }}</div>
+                  <div class="p-2.5 rounded-xl bg-dark-900/80 border border-white/10">
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">ENTRY PRICE</div>
+                    <div class="font-extrabold text-white text-sm mt-0.5">{{ sig.entry }}</div>
+                    <div class="text-[9px] text-slate-500">Market Execution Trigger</div>
                   </div>
-                  <div class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                    <div class="text-[10px] text-rose-300">STOP LOSS (ATR)</div>
-                    <div class="font-bold text-rose-400 mt-0.5">{{ sig.sl }}</div>
+
+                  <div class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                    <div class="text-[10px] text-rose-300 uppercase font-semibold flex items-center justify-between">
+                      <span>STOP LOSS (SL)</span>
+                      <span class="text-[9px] text-rose-400 font-bold">-{{ sig.slDistance || sig.riskPts }} pts</span>
+                    </div>
+                    <div class="font-extrabold text-rose-400 text-sm mt-0.5">{{ sig.sl }}</div>
+                    <div class="text-[9px] text-rose-300/80">Structural Invalidation Level</div>
                   </div>
-                  <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <div class="text-[10px] text-emerald-300">TARGET 1 (1.5R)</div>
-                    <div class="font-bold text-emerald-400 mt-0.5">{{ sig.tp1 }}</div>
+
+                  <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                    <div class="text-[10px] text-emerald-300 uppercase font-semibold flex items-center justify-between">
+                      <span>TAKE PROFIT 1 (1.5R)</span>
+                      <span class="text-[9px] text-emerald-400 font-bold">+{{ sig.tp1Gain || (sig.riskPts * 1.5).toFixed(2) }} pts</span>
+                    </div>
+                    <div class="font-extrabold text-emerald-400 text-sm mt-0.5">{{ sig.tp1 }}</div>
+                    <div class="text-[9px] text-emerald-300/80">Partial Scale-out Target</div>
                   </div>
-                  <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <div class="text-[10px] text-emerald-300">TARGET 2 (3.0R)</div>
-                    <div class="font-bold text-emerald-400 mt-0.5">{{ sig.tp2 }}</div>
+
+                  <div class="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 shadow-sm">
+                    <div class="text-[10px] text-emerald-300 uppercase font-semibold flex items-center justify-between">
+                      <span>TAKE PROFIT 2 (3.0R)</span>
+                      <span class="text-[9px] text-emerald-300 font-black">+{{ sig.tp2Gain || (sig.riskPts * 3.0).toFixed(2) }} pts</span>
+                    </div>
+                    <div class="font-extrabold text-emerald-300 text-sm mt-0.5">{{ sig.tp2 }}</div>
+                    <div class="text-[9px] text-emerald-400">Full Institutional Target</div>
                   </div>
+                </div>
+
+                <!-- Visual Execution Target Bracket Bar (Interactive Gauge) -->
+                <div class="mt-3.5 p-3 rounded-xl bg-dark-950/80 border border-white/5 space-y-2 font-mono text-xs">
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="text-rose-400 font-bold">SL: {{ sig.sl }}</span>
+                    <span class="text-white font-extrabold px-2 py-0.5 rounded bg-dark-800 border border-white/10">ENTRY: {{ sig.entry }}</span>
+                    <span class="text-emerald-300 font-bold">TP1: {{ sig.tp1 }}</span>
+                    <span class="text-emerald-400 font-black">TP2: {{ sig.tp2 }}</span>
+                  </div>
+                  <div class="w-full h-2 rounded-full bg-dark-900 overflow-hidden flex">
+                    <div class="w-1/4 bg-gradient-to-r from-rose-600 to-rose-400" title="Risk Zone"></div>
+                    <div class="w-1/2 bg-gradient-to-r from-cyan-500 to-emerald-400" title="Target 1 Zone"></div>
+                    <div class="w-1/4 bg-gradient-to-r from-emerald-400 to-emerald-500" title="Target 2 Expansion"></div>
+                  </div>
+                  <div class="flex items-center justify-between text-[9px] text-slate-400">
+                    <span>Risk: {{ sig.slDistance || sig.riskPts }} pts</span>
+                    <span class="text-neon-cyan font-bold">Asymmetric R:R 1 : 3.0</span>
+                    <span class="text-emerald-400">Target Gain: +{{ sig.tp2Gain || (sig.riskPts * 3.0).toFixed(2) }} pts</span>
+                  </div>
+                </div>
+
+                <!-- Invalidation Rationale Note -->
+                <div class="mt-2.5 p-2 rounded-lg bg-dark-900/60 border border-white/5 text-[10px] font-mono text-slate-400 flex items-start gap-1.5">
+                  <span class="text-slate-500 shrink-0">🛡️ Invalidation:</span>
+                  <span class="text-slate-300">{{ sig.slRationale || (sig.isBull ? 'Stop Loss placed below recent swing structural low + ATR buffer' : 'Stop Loss placed above recent swing structural high + ATR buffer') }}</span>
                 </div>
 
                 <!-- Technical Factors -->

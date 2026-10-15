@@ -180,26 +180,53 @@ def analyze_market_setup(candles, symbol_name):
     buyer_delta = ((close - low) / total_range) * 100
     seller_delta = ((high - close) / total_range) * 100
 
-    # Trend Direction determination
-    bull_points = 0
-    bear_points = 0
+    # Trend Direction determination (Phase 1: Market Observation)
+    bull_score = 0.0
+    bear_score = 0.0
 
+    # Pillar 1: Dual EMA Ribbon
     if close > ema21 and ema21 > ema55:
-        bull_points += 2
+        bull_score += 2.5
     elif close < ema21 and ema21 < ema55:
-        bear_points += 2
+        bear_score += 2.5
+    elif close > ema21:
+        bull_score += 1.0
+    else:
+        bear_score += 1.0
 
-    if is_bull_bos or is_bull_engulf or is_hammer or is_bull_sweep:
-        bull_points += 2
-    if is_bear_bos or is_bear_engulf or is_shooting_star or is_bear_sweep:
-        bear_points += 2
+    # Pillar 2: Candlestick Rejection & Momentum
+    if is_bull_engulf or is_hammer or is_bull_sweep:
+        bull_score += 2.0
+    if is_bear_engulf or is_shooting_star or is_bear_sweep:
+        bear_score += 2.0
 
-    if buyer_delta > 60:
-        bull_points += 1
-    if seller_delta > 60:
-        bear_points += 1
+    # Pillar 3: Structural Swings (BOS)
+    if is_bull_bos:
+        bull_score += 2.0
+    if is_bear_bos:
+        bear_score += 2.0
 
-    direction = "LONG" if bull_points >= bear_points else "SHORT"
+    # Pillar 4: Orderflow Delta
+    if buyer_delta > 55:
+        bull_score += 1.5
+    if seller_delta > 55:
+        bear_score += 1.5
+
+    # Directional momentum
+    if current['close'] > candles[-5]['close']:
+        bull_score += 1.0
+    else:
+        bear_score += 1.0
+
+    total_score = max(1.0, bull_score + bear_score)
+    is_bull = bull_score >= bear_score
+    trend_direction = "UPWARD TREND (BULLISH)" if is_bull else "DOWNWARD TREND (BEARISH)"
+    trend_state = "UPWARD" if is_bull else "DOWNWARD"
+    trend_conviction = min(99, max(55, int(round((max(bull_score, bear_score) / total_score) * 100))))
+
+    direction = "LONG" if is_bull else "SHORT"
+    indicator = "BUY INDICATOR" if is_bull else "SELL INDICATOR"
+    action_text = "BUY / LONG" if is_bull else "SELL / SHORT"
 
     # Evaluate 5 Confluence Criteria
     criteria = []
@@ -268,26 +295,38 @@ def analyze_market_setup(candles, symbol_name):
         color_code = C_WHITE
         advice = "Low confluence environment. Reduce position size or stand aside."
 
-    # Dynamic Risk & Execution Levels
+    # Dynamic Risk & Execution Levels (TP & SL)
     entry = close
+    risk_pts = round(atr * 1.5, 2)
     if direction == "LONG":
         struct_sl = recent_low - (0.4 * atr)
-        vol_sl = entry - (1.5 * atr)
-        sl = max(struct_sl, vol_sl)
-        risk = entry - sl if entry > sl else atr * 1.5
-        tp1 = entry + (1.5 * risk)
-        tp2 = entry + (3.0 * risk)
+        vol_sl = entry - risk_pts
+        sl = round(max(struct_sl, vol_sl), 2)
+        sl_distance = round(entry - sl, 2)
+        sl_rationale = f"Structural invalidation below recent swing low ({recent_low:.2f}) with 1.5x ATR dynamic buffer."
+        tp1 = round(entry + (1.5 * sl_distance), 2)
+        tp1_gain = round(1.5 * sl_distance, 2)
+        tp2 = round(entry + (3.0 * sl_distance), 2)
+        tp2_gain = round(3.0 * sl_distance, 2)
     else:
         struct_sl = recent_high + (0.4 * atr)
-        vol_sl = entry + (1.5 * atr)
-        sl = min(struct_sl, vol_sl)
-        risk = sl - entry if sl > entry else atr * 1.5
-        tp1 = entry - (1.5 * risk)
-        tp2 = entry - (3.0 * risk)
+        vol_sl = entry + risk_pts
+        sl = round(min(struct_sl, vol_sl), 2)
+        sl_distance = round(sl - entry, 2)
+        sl_rationale = f"Structural invalidation above recent swing high ({recent_high:.2f}) with 1.5x ATR dynamic buffer."
+        tp1 = round(entry - (1.5 * sl_distance), 2)
+        tp1_gain = round(1.5 * sl_distance, 2)
+        tp2 = round(entry - (3.0 * sl_distance), 2)
+        tp2_gain = round(3.0 * sl_distance, 2)
 
     return {
         'symbol': symbol_name,
         'direction': direction,
+        'indicator': indicator,
+        'action_text': action_text,
+        'trend_direction': trend_direction,
+        'trend_state': trend_state,
+        'trend_conviction': trend_conviction,
         'grade': grade,
         'score': score,
         'title': title,
@@ -296,9 +335,13 @@ def analyze_market_setup(candles, symbol_name):
         'criteria': criteria,
         'entry': entry,
         'sl': sl,
+        'sl_distance': sl_distance,
+        'sl_rationale': sl_rationale,
         'tp1': tp1,
+        'tp1_gain': tp1_gain,
         'tp2': tp2,
-        'risk': risk,
+        'tp2_gain': tp2_gain,
+        'risk': sl_distance,
         'atr': atr,
         'adx': adx,
         'er': er,
@@ -306,17 +349,23 @@ def analyze_market_setup(candles, symbol_name):
     }
 
 def print_setup_banner(setup):
-    """Prints a styled terminal card for the detected setup."""
+    """Prints a styled terminal card with Step 1 Observation & Step 2 Indicator."""
     dir_color = C_GREEN if setup['direction'] == 'LONG' else C_RED
     grade_color = setup['color_code']
+    obs_color = C_GREEN if setup['trend_state'] == 'UPWARD' else C_RED
 
     print(f"\n{C_BOLD}┌────────────────────────────────────────────────────────────────────────────┐{C_RESET}")
-    print(f"{C_BOLD}│  {grade_color} SETUP {setup['grade']} DETECTED {C_RESET} {C_WHITE}│{C_RESET} {C_BOLD}{setup['symbol']}{C_RESET} {dir_color}{setup['direction']}{C_RESET} {C_WHITE}│ Confidence: {setup['score']}/5 Confluences │ {setup['time']} │{C_RESET}")
+    print(f"{C_BOLD}│  {grade_color} SETUP {setup['grade']} DETECTED {C_RESET} {C_WHITE}│{C_RESET} {C_BOLD}{setup['symbol']}{C_RESET} {dir_color}{setup['indicator']} [{setup['action_text']}]{C_RESET} {C_WHITE}│ {setup['time']} │{C_RESET}")
     print(f"{C_BOLD}├────────────────────────────────────────────────────────────────────────────┤{C_RESET}")
-    print(f"│  {C_BOLD}Entry Price:{C_RESET} {setup['entry']:.2f}   │  {C_RED}Stop Loss:{C_RESET} {setup['sl']:.2f}  │  {C_GREEN}TP1 (1.5R):{C_RESET} {setup['tp1']:.2f}  │  {C_GREEN}TP2 (3.0R):{C_RESET} {setup['tp2']:.2f} │")
-    print(f"│  {C_BOLD}Risk Range:{C_RESET}  {setup['risk']:.2f} pts │  {C_BOLD}ATR (14):{C_RESET}  {setup['atr']:.2f}  │  {C_BOLD}Wilder ADX:{C_RESET} {setup['adx']:.1f}   │  {C_BOLD}Kaufman ER:{C_RESET} {setup['er']:.2f}   │")
+    print(f"│  {C_CYAN}STEP 1: OBSERVED MARKET TREND{C_RESET} -> {obs_color}{setup['trend_direction']}{C_RESET} [{setup['trend_conviction']}% Conviction]")
+    print(f"│  {C_YELLOW}STEP 2: SIGNAL INDICATOR{C_RESET}      -> {dir_color}{setup['indicator']}{C_RESET} ({setup['action_text']} - Setup {setup['grade']})")
     print(f"{C_BOLD}├────────────────────────────────────────────────────────────────────────────┤{C_RESET}")
-    print(f"│  {C_CYAN}Confluence Matrix Audit:{C_RESET}")
+    print(f"│  {C_BOLD}Entry Price:{C_RESET} {setup['entry']:.2f}   │  {C_RED}Stop Loss (SL):{C_RESET} {setup['sl']:.2f} (-{setup['sl_distance']:.2f} pts)")
+    print(f"│  {C_GREEN}Take Profit 1 (TP1 - 1.5R):{C_RESET} {setup['tp1']:.2f} (+{setup['tp1_gain']:.2f} pts) │ R:R: 1 : 1.5")
+    print(f"│  {C_GREEN}Take Profit 2 (TP2 - 3.0R):{C_RESET} {setup['tp2']:.2f} (+{setup['tp2_gain']:.2f} pts) │ R:R: 1 : 3.0")
+    print(f"│  {C_WHITE}SL Rationale:{C_RESET} {setup['sl_rationale']}")
+    print(f"{C_BOLD}├────────────────────────────────────────────────────────────────────────────┤{C_RESET}")
+    print(f"│  {C_CYAN}Market Confluence Audit ({setup['score']}/5 passed):{C_RESET}")
     for idx, crit in enumerate(setup['criteria'], 1):
         status_sym = f"{C_GREEN}[PASS]{C_RESET}" if crit['passed'] else f"{C_RED}[FAIL]{C_RESET}"
         print(f"│    {idx}. {status_sym} {C_BOLD}{crit['title']}:{C_RESET} {crit['desc']}")
@@ -346,7 +395,7 @@ def run_bot(interval=15, once=False, min_grade=None):
         print(f"[{now_str}] Scan #{scan_count}: Fetching live exchange candles...", end='\r')
 
         targets = [
-            ('XAUUSD', 'XAUUSD', 'XAU/USD Gold'),
+            ('PAXGUSD', 'XAUUSD', 'XAU/USD Gold'),
             ('XXBTZUSD', 'BTCUSDT', 'BTC/USDT Bitcoin')
         ]
 
