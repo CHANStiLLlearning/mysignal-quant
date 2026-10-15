@@ -3,6 +3,163 @@ export const initialTickers = [
   { symbol: 'BTCUSDT', name: 'Bitcoin / Tether', price: 81900.00, change: -1.40, isBull: false, tvSymbol: 'BINANCE:BTCUSDT', category: 'crypto', assetType: 'crypto' },
 ];
 
+export const initialMarketPredictions = {
+  XAUUSD: {
+    symbol: 'XAUUSD',
+    name: 'Gold Spot / US Dollar',
+    currentPrice: 4152.00,
+    verdict: 'BUY',
+    verdictLabel: '▲ PREDICTED BUY',
+    verdictSubtext: 'High Probability Bullish Outperform',
+    actionText: 'BUY / LONG',
+    isBull: true,
+    buyProbability: 84,
+    sellProbability: 16,
+    confidence: 84,
+    expectedMovePts: '+39.00 pts',
+    targetPrice: 4191.00,
+    invalidationLevel: 4139.00,
+    riskReward: '1 : 3.0',
+    summary: 'Quantitative consensus predicts an 84% probability of BUY continuation toward 4191.00. Key invalidation pivot sits at 4139.00.',
+    models: [
+      {
+        name: 'Trend Vector (Dual EMA 21/55)',
+        prediction: 'BUY',
+        weight: '25%',
+        score: 9.5,
+        bias: 'BULLISH',
+        detail: 'EMA 21 (4148.5) > EMA 55 (4138.2) confirming bullish trend ribbon'
+      },
+      {
+        name: 'Directional Momentum (ADX & DMI)',
+        prediction: 'BUY',
+        weight: '20%',
+        score: 8.8,
+        bias: '+DI LEADING',
+        detail: '+DI: 31.8 | -DI: 15.2 | ADX Power: 34.6 (Strong Trend Velocity)'
+      },
+      {
+        name: 'Microstructure Delta & VWAP',
+        prediction: 'BUY',
+        weight: '25%',
+        score: 9.1,
+        bias: 'BUYER DOMINANCE',
+        detail: 'Orderflow delta at +18.4% above intraday VWAP 4142.10'
+      },
+      {
+        name: 'Fractal Memory (Hurst R/S)',
+        prediction: 'BUY',
+        weight: '15%',
+        score: 8.9,
+        bias: 'PERSISTENT TREND',
+        detail: 'Hurst exponent 0.592 validates persistent upward trajectory'
+      },
+      {
+        name: 'Structural Geometry & Imbalance',
+        prediction: 'BUY',
+        weight: '15%',
+        score: 9.4,
+        bias: 'BULLISH EXPANSION',
+        detail: 'Higher Highs / Higher Lows with active Bullish FVG at 4140.00'
+      }
+    ],
+    horizons: [
+      { timeframe: '15M', label: 'Next 15M Bar', prediction: 'BUY', target: 4159.50, prob: 86, expectedPts: '+7.50', range: '4148.00 - 4162.00' },
+      { timeframe: '1H', label: 'Next 1 Hour', prediction: 'BUY', target: 4172.00, prob: 84, expectedPts: '+20.00', range: '4144.00 - 4178.00' },
+      { timeframe: '4H', label: 'Next 4 Hours', prediction: 'BUY', target: 4191.00, prob: 78, expectedPts: '+39.00', range: '4139.00 - 4205.00' },
+      { timeframe: '24H', label: 'Next 24 Hours', prediction: 'BUY', target: 4215.00, prob: 72, expectedPts: '+63.00', range: '4130.00 - 4235.00' }
+    ],
+    contract: {
+      question: 'Will Gold (XAUUSD) close HIGHER (BUY) or LOWER (SELL) by next session close?',
+      buyOdds: 0.84,
+      sellOdds: 0.16,
+      buyPriceDisplay: '84¢',
+      sellPriceDisplay: '16¢',
+      volume24h: '$5.42M',
+      totalPredictions: 1840,
+      crowdBuyPct: 84,
+      crowdSellPct: 16
+    }
+  },
+  BTCUSDT: {
+    symbol: 'BTCUSDT',
+    name: 'Bitcoin / Tether Perpetual',
+    currentPrice: 81900.00,
+    verdict: 'SELL',
+    verdictLabel: '▼ PREDICTED SELL',
+    verdictSubtext: 'High Probability Bearish Breakdown',
+    actionText: 'SELL / SHORT',
+    isBull: false,
+    buyProbability: 8,
+    sellProbability: 92,
+    confidence: 92,
+    expectedMovePts: '-1590.00 pts',
+    targetPrice: 79530.00,
+    invalidationLevel: 81650.00,
+    riskReward: '1 : 3.0',
+    summary: 'Quantitative consensus predicts a 92% probability of SELL continuation toward 79530.00. Key invalidation pivot sits at 81650.00.',
+    models: [
+      {
+        name: 'Trend Vector (Dual EMA 21/55)',
+        prediction: 'SELL',
+        weight: '25%',
+        score: 9.6,
+        bias: 'BEARISH',
+        detail: 'EMA 21 (81450.0) < EMA 55 (82100.0) bearish momentum expansion'
+      },
+      {
+        name: 'Directional Momentum (ADX & DMI)',
+        prediction: 'SELL',
+        weight: '20%',
+        score: 9.2,
+        bias: '-DI LEADING',
+        detail: '+DI: 14.1 | -DI: 36.8 | ADX Power: 31.5 (Strong Trend Velocity)'
+      },
+      {
+        name: 'Microstructure Delta & VWAP',
+        prediction: 'SELL',
+        weight: '25%',
+        score: 9.0,
+        bias: 'SELLER DOMINANCE',
+        detail: 'Heavy distribution delta at -21.4% below intraday VWAP'
+      },
+      {
+        name: 'Fractal Memory (Hurst R/S)',
+        prediction: 'SELL',
+        weight: '15%',
+        score: 8.8,
+        bias: 'PERSISTENT BEAR',
+        detail: 'Hurst exponent 0.614 confirms strong bearish momentum persistence'
+      },
+      {
+        name: 'Structural Geometry & Imbalance',
+        prediction: 'SELL',
+        weight: '15%',
+        score: 9.3,
+        bias: 'BEARISH BOS',
+        detail: 'Confirmed Break of Structure (BOS) with Supply FVG overhead'
+      }
+    ],
+    horizons: [
+      { timeframe: '15M', label: 'Next 15M Bar', prediction: 'SELL', target: 81550.00, prob: 94, expectedPts: '-350.00', range: '81400.00 - 82000.00' },
+      { timeframe: '1H', label: 'Next 1 Hour', prediction: 'SELL', target: 80800.00, prob: 92, expectedPts: '-1100.00', range: '80400.00 - 81950.00' },
+      { timeframe: '4H', label: 'Next 4 Hours', prediction: 'SELL', target: 79530.00, prob: 86, expectedPts: '-2370.00', range: '78900.00 - 81650.00' },
+      { timeframe: '24H', label: 'Next 24 Hours', prediction: 'SELL', target: 78500.00, prob: 80, expectedPts: '-3400.00', range: '77800.00 - 81800.00' }
+    ],
+    contract: {
+      question: 'Will Bitcoin (BTCUSDT) close HIGHER (BUY) or LOWER (SELL) by next session close?',
+      buyOdds: 0.08,
+      sellOdds: 0.92,
+      buyPriceDisplay: '8¢',
+      sellPriceDisplay: '92¢',
+      volume24h: '$24.80M',
+      totalPredictions: 4210,
+      crowdBuyPct: 8,
+      crowdSellPct: 92
+    }
+  }
+};
+
 export const initialSignals = [
   {
     id: 'sig-xau-1',
@@ -52,6 +209,7 @@ export const initialSignals = [
         }
       ]
     },
+    marketPrediction: initialMarketPredictions.XAUUSD,
     setup: {
       grade: 'A+',
       score: 95,
@@ -175,6 +333,7 @@ export const initialSignals = [
         }
       ]
     },
+    marketPrediction: initialMarketPredictions.BTCUSDT,
     setup: {
       grade: 'A',
       score: 88,

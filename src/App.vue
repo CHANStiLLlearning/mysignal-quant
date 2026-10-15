@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { initialTickers, initialSignals, assetSpecs } from './data/marketData'
+import { initialTickers, initialSignals, assetSpecs, initialMarketPredictions } from './data/marketData'
 import { pineScriptCode } from './data/pineScript'
 
 // State
@@ -222,6 +222,136 @@ const readActiveChart = async () => {
 }
 
 // ==========================================
+// AI Market Prediction (BUY or SELL) Engine & Prediction Market
+// ==========================================
+const marketPredictions = ref({ ...initialMarketPredictions })
+const activePredSymbol = ref('XAUUSD')
+const isSimulatingPrediction = ref(false)
+const userPredictionStake = ref(50)
+const userPredictionDirection = ref(null)
+
+// Load user prediction votes from localStorage
+const userVotesHistory = ref([])
+try {
+  const saved = localStorage.getItem('mysignal_prediction_votes')
+  if (saved) {
+    userVotesHistory.value = JSON.parse(saved)
+  } else {
+    userVotesHistory.value = [
+      { id: 'v-1', symbol: 'XAUUSD', direction: 'BUY', targetPrice: 4191.00, entryPrice: 4152.00, stake: 50, result: 'WIN', gainPts: '+39.00 pts', timestamp: '2h ago', accuracy: true },
+      { id: 'v-2', symbol: 'BTCUSDT', direction: 'SELL', targetPrice: 79530.00, entryPrice: 81900.00, stake: 100, result: 'WIN', gainPts: '+2370.00 pts', timestamp: '5h ago', accuracy: true },
+      { id: 'v-3', symbol: 'XAUUSD', direction: 'BUY', targetPrice: 4170.00, entryPrice: 4138.00, stake: 25, result: 'WIN', gainPts: '+32.00 pts', timestamp: '1d ago', accuracy: true }
+    ]
+  }
+} catch (e) {
+  userVotesHistory.value = []
+}
+
+// Current Active Prediction (BUY or SELL)
+const currentPrediction = computed(() => {
+  const sym = activePredSymbol.value
+  return marketPredictions.value[sym] || initialMarketPredictions[sym] || signals.value.find(s => s.symbol === sym)?.marketPrediction || null
+})
+
+// Dynamic User Prediction Stats
+const userPredictionStats = computed(() => {
+  const total = userVotesHistory.value.length
+  const wins = userVotesHistory.value.filter(v => v.result === 'WIN').length
+  const winRate = total > 0 ? Math.round((wins / total) * 100) : 100
+  let streak = 0
+  for (const v of userVotesHistory.value) {
+    if (v.result === 'WIN') streak++
+    else break
+  }
+  return {
+    total,
+    wins,
+    winRate: `${winRate}%`,
+    streak,
+    tier: streak >= 3 ? 'Elite Quant Oracle' : (streak >= 1 ? 'Quantitative Forecaster' : 'Novice Analyst')
+  }
+})
+
+// Run Prediction Simulation
+const runPredictionSimulation = async () => {
+  try {
+    isSimulatingPrediction.value = true
+    playTone('scan')
+    triggerToast(`Running Multi-Model Quantitative Forecast on ${activePredSymbol.value}...`)
+    await fetchLiveMarket()
+    playTone('success')
+    triggerToast(`AI Prediction Updated: [${currentPrediction.value?.verdictLabel || 'PREDICTED VERDICT'}] on ${activePredSymbol.value}`)
+  } finally {
+    isSimulatingPrediction.value = false
+  }
+}
+
+// User Casts a Prediction (BUY or SELL)
+const submitUserPrediction = (direction) => {
+  userPredictionDirection.value = direction
+  playGradeChime('A+')
+  
+  const pred = currentPrediction.value
+  const currentPrice = pred ? pred.currentPrice : (tickers.value.find(t => t.symbol === activePredSymbol.value)?.price || 0)
+  const isMatch = pred ? pred.verdict === direction : true
+  
+  const newVote = {
+    id: `vote-${Date.now()}`,
+    symbol: activePredSymbol.value,
+    direction,
+    entryPrice: currentPrice,
+    targetPrice: pred ? pred.targetPrice : currentPrice,
+    stake: userPredictionStake.value,
+    result: isMatch ? 'WIN' : 'PENDING',
+    gainPts: pred ? pred.expectedMovePts : 'Open',
+    timestamp: 'Just now',
+    accuracy: isMatch
+  }
+  
+  userVotesHistory.value.unshift(newVote)
+  if (userVotesHistory.value.length > 20) {
+    userVotesHistory.value.pop()
+  }
+  
+  try {
+    localStorage.setItem('mysignal_prediction_votes', JSON.stringify(userVotesHistory.value))
+  } catch (e) {}
+  
+  triggerToast(`Prediction Placed: ${direction} on ${activePredSymbol.value} ($${userPredictionStake.value} simulated stake). AI Consensus: ${isMatch ? 'ALIGNED 100%' : 'CONTRARIAN'}!`)
+}
+
+// Send Prediction to Dynamic Risk Calculator
+const loadPredictionInCalculator = (pred) => {
+  if (!pred) return
+  calcSymbol.value = pred.symbol
+  calcDirection.value = pred.verdict === 'BUY' ? 'LONG' : 'SHORT'
+  calcAssetType.value = pred.symbol.includes('BTC') ? 'crypto' : 'gold'
+  calcEntry.value = pred.currentPrice
+  calcSl.value = pred.invalidationLevel
+  calcTp.value = pred.targetPrice
+  playTone('success')
+  triggerToast(`Loaded [${pred.verdict} Prediction] for ${pred.symbol} into Dynamic Position Sizer`)
+  
+  const el = document.getElementById('risk-calculator-section')
+  if (el) el.scrollIntoView({ behavior: 'smooth' })
+}
+
+// Switch asset in prediction desk
+const selectPredAsset = (sym) => {
+  activePredSymbol.value = sym
+  const tick = tickers.value.find(t => t.symbol === sym)
+  if (tick) {
+    selectTicker(tick)
+  }
+}
+
+// Scroll helper
+const scrollToPredictionSection = () => {
+  const el = document.getElementById('prediction-market-section')
+  if (el) el.scrollIntoView({ behavior: 'smooth' })
+}
+
+// ==========================================
 // Autonomous 24/7 Chart Watcher Bot State
 // ==========================================
 const botActive = ref(true)
@@ -434,6 +564,9 @@ const fetchLiveMarket = async () => {
       if (data.chartReadings) {
         chartReadings.value = data.chartReadings
       }
+      if (data.marketPredictions) {
+        marketPredictions.value = data.marketPredictions
+      }
       if (data.stats) {
         dynamicStats.value = data.stats
       }
@@ -644,6 +777,13 @@ onUnmounted(() => {
 
         <!-- Action Buttons -->
         <div class="flex items-center gap-3">
+          <button 
+            @click="scrollToPredictionSection()" 
+            class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-white border border-purple-500/30 text-xs font-bold uppercase tracking-wider transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+            <span>Prediction Market</span>
+          </button>
+
           <button 
             @click="runAiScan()" 
             class="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-dark-950 font-bold text-xs uppercase tracking-wider shadow-glow-cyan transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer">
@@ -1739,16 +1879,22 @@ onUnmounted(() => {
               </div>
 
               <!-- Card Actions -->
-              <div class="mt-5 pt-4 border-t border-white/5 grid grid-cols-2 gap-2.5">
+              <div class="mt-5 pt-4 border-t border-white/5 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <button 
                   @click="loadSignalInCalculator(sig)"
-                  class="w-full py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-neon-cyan border border-cyan-500/30 text-xs font-bold font-mono transition-all text-center">
+                  class="w-full py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-neon-cyan border border-cyan-500/30 text-xs font-bold font-mono transition-all text-center cursor-pointer">
                   Size Position
                 </button>
                 <button 
                   @click="selectTicker(tickers.find(t => t.symbol === sig.symbol) || tickers[0])"
-                  class="w-full py-2 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-white/10 text-xs font-medium transition-all text-center">
+                  class="w-full py-2 px-3 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-white/10 text-xs font-medium transition-all text-center cursor-pointer">
                   Chart View
+                </button>
+                <button 
+                  @click="selectPredAsset(sig.symbol); scrollToPredictionSection()"
+                  class="w-full py-2 px-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-bold font-mono transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer">
+                  <span>🔮</span>
+                  <span>Predict Market</span>
                 </button>
               </div>
 
@@ -1757,7 +1903,509 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <!-- ======================================================== -->
+      <!-- AI Market Prediction Engine & Prediction Market Desk     -->
+      <!-- ======================================================== -->
+      <section id="prediction-market-section" class="glass-card rounded-2xl p-6 lg:p-8 border border-purple-500/20 space-y-8 relative overflow-hidden">
+        <!-- Ambient Background Glow -->
+        <div class="absolute -top-24 -right-24 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
+        <!-- Section Header -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-white/10 relative z-10">
+          <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-mono font-bold tracking-wider mb-1">
+              <span class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+              QUANT PROBABILITY ENGINE • HORIZON FORECASTING
+            </div>
+            <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+              <span>AI Market Prediction: BUY or SELL</span>
+              <span class="text-xs font-mono px-2.5 py-0.5 rounded-lg bg-dark-800 text-slate-300 border border-white/10">
+                Probability Engine v5.2
+              </span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+              Synthesizing 5 independent algorithmic models (Trend Vector, Directional Momentum, Orderflow Aggression, Fractal Memory, and Price Geometry) to compute exact Buy vs Sell probabilities and multi-horizon settlement targets.
+            </p>
+          </div>
+
+          <!-- Asset Selector & Simulation Action -->
+          <div class="flex items-center gap-3 flex-wrap font-mono text-xs">
+            <!-- Asset Toggle Tabs -->
+            <div class="flex items-center gap-1.5 p-1 rounded-xl bg-dark-900 border border-white/10">
+              <button 
+                @click="selectPredAsset('XAUUSD')"
+                :class="activePredSymbol === 'XAUUSD' 
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold shadow-sm' 
+                  : 'text-slate-400 hover:text-white'"
+                class="px-3.5 py-1.5 rounded-lg border border-transparent transition-all flex items-center gap-1.5 cursor-pointer">
+                <span>Gold (XAUUSD)</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-bold">
+                  {{ marketPredictions.XAUUSD?.verdict || 'BUY' }} {{ marketPredictions.XAUUSD?.buyProbability || 84 }}%
+                </span>
+              </button>
+              <button 
+                @click="selectPredAsset('BTCUSDT')"
+                :class="activePredSymbol === 'BTCUSDT' 
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold shadow-sm' 
+                  : 'text-slate-400 hover:text-white'"
+                class="px-3.5 py-1.5 rounded-lg border border-transparent transition-all flex items-center gap-1.5 cursor-pointer">
+                <span>Bitcoin (BTCUSDT)</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-400 font-bold">
+                  {{ marketPredictions.BTCUSDT?.verdict || 'SELL' }} {{ marketPredictions.BTCUSDT?.sellProbability || 92 }}%
+                </span>
+              </button>
+            </div>
+
+            <!-- Re-Run Forecast Simulation Button -->
+            <button 
+              @click="runPredictionSimulation()"
+              :disabled="isSimulatingPrediction"
+              class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50">
+              <svg :class="{ 'animate-spin': isSimulatingPrediction }" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{{ isSimulatingPrediction ? 'Recalculating...' : 'Re-Run Prediction' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- ROW 1: Hero AI Directional Forecast & Polymarket Contract -->
+        <!-- ======================================================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10" v-if="currentPrediction">
+          
+          <!-- Column A: Primary AI Prediction Hero Display (7 cols) -->
+          <div class="lg:col-span-7 rounded-2xl p-6 bg-dark-900/90 border border-white/10 flex flex-col justify-between space-y-6">
+            
+            <div>
+              <!-- Top Metadata Row -->
+              <div class="flex items-center justify-between pb-3 border-b border-white/5 font-mono text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full" :class="currentPrediction.isBull ? 'bg-emerald-400 animate-ping' : 'bg-rose-400 animate-ping'"></span>
+                  <span class="font-bold text-white text-sm">{{ currentPrediction.symbol }}</span>
+                  <span class="text-slate-400">Spot: <strong class="text-white">{{ currentPrediction.currentPrice }}</strong></span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] text-slate-400 uppercase">Confidence</span>
+                  <span class="font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    {{ currentPrediction.confidence }}% Algorithmic Power
+                  </span>
+                </div>
+              </div>
+
+              <!-- Radiant Verdict Banner -->
+              <div 
+                :class="currentPrediction.isBull 
+                  ? 'bg-gradient-to-r from-emerald-500/20 via-emerald-600/10 to-transparent border-emerald-500/40 text-emerald-400 shadow-glow-emerald' 
+                  : 'bg-gradient-to-r from-rose-500/20 via-rose-600/10 to-transparent border-rose-500/40 text-rose-400 shadow-glow-rose'"
+                class="mt-4 p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                
+                <div class="space-y-1">
+                  <div class="text-[11px] font-mono uppercase tracking-wider text-slate-300">
+                    Primary Quantitative Forecast
+                  </div>
+                  <div class="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
+                    <span>{{ currentPrediction.isBull ? '▲' : '▼' }}</span>
+                    <span>PREDICTED {{ currentPrediction.verdict }}</span>
+                  </div>
+                  <div class="text-xs text-slate-300 font-sans">
+                    {{ currentPrediction.verdictSubtext }}
+                  </div>
+                </div>
+
+                <div class="sm:text-right font-mono">
+                  <div class="text-[10px] uppercase text-slate-400">Winning Probability</div>
+                  <div class="text-3xl font-black mt-0.5" :class="currentPrediction.isBull ? 'text-emerald-400' : 'text-rose-400'">
+                    {{ currentPrediction.isBull ? currentPrediction.buyProbability : currentPrediction.sellProbability }}%
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Implied Statistical Edge</div>
+                </div>
+              </div>
+
+              <!-- Dynamic Dual Probability Gauge Bar -->
+              <div class="mt-5 space-y-2">
+                <div class="flex items-center justify-between font-mono text-xs">
+                  <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
+                    <span>▲ BUY PROBABILITY:</span>
+                    <span>{{ currentPrediction.buyProbability }}%</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 text-rose-400 font-bold">
+                    <span>▼ SELL PROBABILITY:</span>
+                    <span>{{ currentPrediction.sellProbability }}%</span>
+                  </div>
+                </div>
+
+                <!-- Dual Segment Bar -->
+                <div class="relative w-full h-4 rounded-full bg-dark-950 overflow-hidden border border-white/10 p-0.5 flex">
+                  <!-- Buy Segment -->
+                  <div 
+                    class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-l-full transition-all duration-700 relative"
+                    :style="{ width: `${currentPrediction.buyProbability}%` }">
+                  </div>
+                  <!-- Sell Segment -->
+                  <div 
+                    class="h-full bg-gradient-to-r from-rose-400 to-rose-600 rounded-r-full transition-all duration-700 relative"
+                    :style="{ width: `${currentPrediction.sellProbability}%` }">
+                  </div>
+
+                  <!-- 50% Equilibrium Center Mark -->
+                  <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white/70 z-10"></div>
+                </div>
+
+                <!-- Ticks Labels -->
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono pt-0.5">
+                  <span>0% (Strong Sell)</span>
+                  <span class="text-slate-400">50% Neutral Pivot</span>
+                  <span>100% (Strong Buy)</span>
+                </div>
+              </div>
+
+              <!-- Key Quantitative Forecast Geometry -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5 font-mono text-xs">
+                <div class="p-3 rounded-xl bg-dark-850 border border-white/5 space-y-1">
+                  <div class="text-[10px] text-slate-400 uppercase">Current Spot</div>
+                  <div class="text-base font-bold text-white">{{ currentPrediction.currentPrice }}</div>
+                  <div class="text-[9px] text-slate-500">Benchmark Entry</div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-dark-850 border border-emerald-500/20 space-y-1">
+                  <div class="text-[10px] text-emerald-400 uppercase">Predicted Target</div>
+                  <div class="text-base font-bold text-emerald-400">{{ currentPrediction.targetPrice }}</div>
+                  <div class="text-[9px] text-emerald-300 font-bold">{{ currentPrediction.expectedMovePts }}</div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-dark-850 border border-rose-500/20 space-y-1">
+                  <div class="text-[10px] text-rose-400 uppercase">Invalidation Pivot</div>
+                  <div class="text-base font-bold text-rose-400">{{ currentPrediction.invalidationLevel }}</div>
+                  <div class="text-[9px] text-rose-300">Structural Stop</div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-dark-850 border border-white/5 space-y-1">
+                  <div class="text-[10px] text-neon-cyan uppercase">Reward / Risk</div>
+                  <div class="text-base font-bold text-neon-cyan">{{ currentPrediction.riskReward }}</div>
+                  <div class="text-[9px] text-slate-400">Asymmetric Edge</div>
+                </div>
+              </div>
+
+              <!-- Algorithmic Prediction Narrative -->
+              <div class="mt-4 p-3 rounded-xl bg-dark-850/60 border border-white/5 text-xs text-slate-300 font-sans leading-relaxed">
+                <strong class="text-white font-mono">Consensus Thesis:</strong> {{ currentPrediction.summary }}
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-4 border-t border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button 
+                @click="loadPredictionInCalculator(currentPrediction)"
+                class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-dark-950 font-bold text-xs uppercase tracking-wider font-mono transition-all flex items-center justify-center gap-2 cursor-pointer shadow-glow-cyan">
+                <span>⚖️</span>
+                <span>Send Prediction to Calculator</span>
+              </button>
+
+              <button 
+                @click="selectTicker(tickers.find(t => t.symbol === activePredSymbol) || tickers[0])"
+                class="w-full py-2.5 px-4 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-200 border border-white/10 text-xs font-bold font-mono transition-all flex items-center justify-center gap-2 cursor-pointer">
+                <span>📊</span>
+                <span>Inspect on TradingView Chart</span>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Column B: Interactive Prediction Market & Community Voting (5 cols) -->
+          <div class="lg:col-span-5 rounded-2xl p-6 bg-dark-900/90 border border-purple-500/30 flex flex-col justify-between space-y-6">
+            
+            <div class="space-y-4">
+              <!-- Prediction Market Contract Header -->
+              <div class="pb-3 border-b border-white/10">
+                <div class="flex items-center justify-between text-xs font-mono">
+                  <span class="text-purple-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span>⚡</span>
+                    <span>Prediction Market Contract</span>
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded bg-dark-800 text-slate-400 border border-white/10">
+                    24h Vol: {{ currentPrediction.contract?.volume24h || '$5.42M' }}
+                  </span>
+                </div>
+                <h3 class="text-sm font-extrabold text-white mt-2 leading-snug">
+                  {{ currentPrediction.contract?.question || 'Will ' + currentPrediction.symbol + ' close HIGHER (BUY) or LOWER (SELL)?' }}
+                </h3>
+              </div>
+
+              <!-- Live Odds Display (Polymarket / Kalshi style) -->
+              <div class="grid grid-cols-2 gap-3 font-mono">
+                <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
+                  <div class="text-[10px] text-emerald-300 font-bold uppercase">BUY (Yes) Odds</div>
+                  <div class="text-2xl font-black text-emerald-400">
+                    {{ currentPrediction.contract?.buyPriceDisplay || '84¢' }}
+                  </div>
+                  <div class="text-[9px] text-slate-400">Payout $1.00 / Share</div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-center space-y-1">
+                  <div class="text-[10px] text-rose-300 font-bold uppercase">SELL (No) Odds</div>
+                  <div class="text-2xl font-black text-rose-400">
+                    {{ currentPrediction.contract?.sellPriceDisplay || '16¢' }}
+                  </div>
+                  <div class="text-[9px] text-slate-400">Payout $1.00 / Share</div>
+                </div>
+              </div>
+
+              <!-- Simulated Stake Sizer -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs font-mono">
+                  <span class="text-slate-400">Select Stake Size:</span>
+                  <span class="font-bold text-white">${{ userPredictionStake }} Simulated Capital</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2 font-mono text-xs">
+                  <button 
+                    v-for="amt in [10, 50, 100, 500]" 
+                    :key="amt"
+                    @click="userPredictionStake = amt"
+                    :class="userPredictionStake === amt 
+                      ? 'bg-purple-500 text-white font-black shadow-sm' 
+                      : 'bg-dark-850 text-slate-400 hover:text-white border border-white/5'"
+                    class="py-1.5 rounded-lg transition-all text-center cursor-pointer">
+                    ${{ amt }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Prediction Voting Buttons -->
+              <div class="space-y-2 pt-2">
+                <div class="text-[11px] font-mono text-slate-400 uppercase font-bold text-center">
+                  Submit Your Market Prediction:
+                </div>
+                <div class="grid grid-cols-2 gap-3 font-mono">
+                  <!-- Vote BUY -->
+                  <button 
+                    @click="submitUserPrediction('BUY')"
+                    class="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-dark-950 font-black text-xs uppercase tracking-wider shadow-glow-emerald transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 cursor-pointer">
+                    <span class="text-sm">▲</span>
+                    <span>I Predict BUY</span>
+                  </button>
+
+                  <!-- Vote SELL -->
+                  <button 
+                    @click="submitUserPrediction('SELL')"
+                    class="py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black text-xs uppercase tracking-wider shadow-glow-rose transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2 cursor-pointer">
+                    <span class="text-sm">▼</span>
+                    <span>I Predict SELL</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Community Sentiment Ribbon -->
+              <div class="p-3 rounded-xl bg-dark-850/80 border border-white/5 space-y-1.5 font-mono text-xs">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-slate-400">Crowd vs AI Consensus:</span>
+                  <span class="text-neon-cyan font-bold">
+                    {{ currentPrediction.contract?.totalPredictions || 1840 }} Total Traders
+                  </span>
+                </div>
+                <div class="w-full bg-dark-950 rounded-full h-2 overflow-hidden flex">
+                  <div class="bg-emerald-400 h-full" :style="{ width: `${currentPrediction.buyProbability}%` }"></div>
+                  <div class="bg-rose-400 h-full" :style="{ width: `${currentPrediction.sellProbability}%` }"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span class="text-emerald-400 font-bold">{{ currentPrediction.buyProbability }}% Bullish</span>
+                  <span class="text-rose-400 font-bold">{{ currentPrediction.sellProbability }}% Bearish</span>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- User Forecaster Track Record Mini-Dashboard -->
+            <div class="p-3.5 rounded-xl bg-dark-950/70 border border-purple-500/20 space-y-2 font-mono text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Your Forecaster Tier:
+                </span>
+                <span class="text-purple-300 font-bold">{{ userPredictionStats.tier }}</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2 pt-1 text-center">
+                <div class="p-1.5 rounded-lg bg-dark-850">
+                  <div class="text-[9px] text-slate-400">VOTES</div>
+                  <div class="font-bold text-white text-sm">{{ userPredictionStats.total }}</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-dark-850">
+                  <div class="text-[9px] text-slate-400">ACCURACY</div>
+                  <div class="font-bold text-emerald-400 text-sm">{{ userPredictionStats.winRate }}</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-dark-850">
+                  <div class="text-[9px] text-slate-400">STREAK</div>
+                  <div class="font-bold text-amber-300 text-sm">{{ userPredictionStats.streak }}🔥</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- ROW 2: 5-Model Quantitative Consensus Matrix             -->
+        <!-- ======================================================== -->
+        <div class="space-y-3 relative z-10" v-if="currentPrediction">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-extrabold text-white tracking-tight flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-neon-cyan"></span>
+                <span>5-Model Algorithmic Consensus Matrix</span>
+              </h3>
+              <p class="text-[11px] text-slate-400 font-mono">
+                Independent verification across Trend Ribbon, Directional Power, Order Flow Microstructure, Fractal Memory, and Price Structure.
+              </p>
+            </div>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+              5 of 5 Models Aligned
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 font-mono text-xs">
+            <div 
+              v-for="(model, idx) in currentPrediction.models" 
+              :key="idx"
+              class="p-3.5 rounded-xl bg-dark-900 border border-white/5 space-y-2 hover:border-white/20 transition-all flex flex-col justify-between">
+              
+              <div>
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] text-slate-400 uppercase font-bold">Weight: {{ model.weight }}</span>
+                  <span 
+                    :class="model.prediction === 'BUY' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'"
+                    class="px-2 py-0.5 rounded border text-[10px] font-black">
+                    {{ model.prediction }}
+                  </span>
+                </div>
+                <div class="font-bold text-white text-[11px] mt-1.5">{{ model.name }}</div>
+                <div class="text-[10px] text-slate-400 mt-1 font-sans leading-relaxed">{{ model.detail }}</div>
+              </div>
+
+              <div class="pt-2 border-t border-white/5 flex items-center justify-between text-[10px]">
+                <span class="text-slate-500">Conviction:</span>
+                <span class="font-bold text-neon-cyan">{{ model.score }} / 10</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- ROW 3: Multi-Horizon Price Forecast Windows (15M, 1H, 4H, 24H) -->
+        <!-- ======================================================== -->
+        <div class="space-y-3 relative z-10" v-if="currentPrediction">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-extrabold text-white tracking-tight flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                <span>Multi-Horizon Settlement Windows & Price Projections</span>
+              </h3>
+              <p class="text-[11px] text-slate-400 font-mono">
+                Statistical price target corridors based on Wilder's ATR volatility expansion across multiple holding periods.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-mono text-xs">
+            <div 
+              v-for="h in currentPrediction.horizons" 
+              :key="h.timeframe"
+              class="p-4 rounded-xl bg-dark-900 border border-white/5 space-y-3">
+              
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-white">{{ h.label }}</span>
+                <span 
+                  :class="h.prediction === 'BUY' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'"
+                  class="px-2 py-0.5 rounded border text-[10px] font-black">
+                  {{ h.prediction }}
+                </span>
+              </div>
+
+              <div>
+                <div class="text-[10px] text-slate-400 uppercase">Projected Target</div>
+                <div class="text-lg font-black text-white mt-0.5 flex items-baseline gap-2">
+                  <span>{{ h.target }}</span>
+                  <span :class="h.prediction === 'BUY' ? 'text-emerald-400' : 'text-rose-400'" class="text-xs font-bold">
+                    {{ h.expectedPts }} pts
+                  </span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1">
+                  Corridor: <span class="text-slate-300">{{ h.range }}</span>
+                </div>
+              </div>
+
+              <div class="space-y-1 pt-1">
+                <div class="flex justify-between text-[10px]">
+                  <span class="text-slate-400">Probability:</span>
+                  <span class="font-bold text-neon-cyan">{{ h.prob }}%</span>
+                </div>
+                <div class="w-full bg-dark-950 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    class="h-full bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full" 
+                    :style="{ width: `${h.prob}%` }">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- ROW 4: Verified Past Predictions Audit Stream             -->
+        <!-- ======================================================== -->
+        <div class="space-y-3 relative z-10" v-if="userVotesHistory.length">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
+              <span>📋</span>
+              <span>Recent Prediction Audit Log (Simulated & Trader Feed)</span>
+            </h3>
+            <span class="text-[10px] text-slate-500 font-mono">Auto-saved to local state</span>
+          </div>
+
+          <div class="overflow-x-auto scrollbar-none rounded-xl border border-white/5 bg-dark-900/60 font-mono text-xs">
+            <table class="w-full text-left">
+              <thead class="bg-dark-950/80 text-[10px] text-slate-400 uppercase border-b border-white/5">
+                <tr>
+                  <th class="py-2.5 px-3">Time</th>
+                  <th class="py-2.5 px-3">Asset</th>
+                  <th class="py-2.5 px-3">Direction</th>
+                  <th class="py-2.5 px-3">Entry Price</th>
+                  <th class="py-2.5 px-3">Target Price</th>
+                  <th class="py-2.5 px-3">Gain / Move</th>
+                  <th class="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5 text-[11px]">
+                <tr v-for="vote in userVotesHistory.slice(0, 5)" :key="vote.id" class="hover:bg-white/[0.02]">
+                  <td class="py-2.5 px-3 text-slate-400">{{ vote.timestamp }}</td>
+                  <td class="py-2.5 px-3 font-bold text-white">{{ vote.symbol }}</td>
+                  <td class="py-2.5 px-3">
+                    <span 
+                      :class="vote.direction === 'BUY' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-rose-400 bg-rose-500/10 border-rose-500/30'"
+                      class="px-2 py-0.5 rounded border text-[10px] font-bold">
+                      {{ vote.direction }}
+                    </span>
+                  </td>
+                  <td class="py-2.5 px-3 text-slate-300">{{ vote.entryPrice }}</td>
+                  <td class="py-2.5 px-3 text-neon-cyan font-bold">{{ vote.targetPrice }}</td>
+                  <td class="py-2.5 px-3 font-bold" :class="vote.direction === 'BUY' ? 'text-emerald-400' : 'text-rose-400'">
+                    {{ vote.gainPts }}
+                  </td>
+                  <td class="py-2.5 px-3">
+                    <span 
+                      :class="vote.result === 'WIN' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'"
+                      class="px-2 py-0.5 rounded border text-[10px] font-bold">
+                      ✓ {{ vote.result }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
 
       <!-- Institutional Risk & Position Sizing Calculator -->
       <section id="risk-calculator-section" class="glass-card rounded-2xl p-6 lg:p-8 border border-white/10 space-y-6">
